@@ -1,23 +1,17 @@
-# =====================================================
-# Schema Configuration for Gold Dimension Pipeline
-# Description: Defines sources and model metadata for DBT
-# Author: Data Engineer
-# =====================================================
-
 version: 2
 
 # Source definitions for Silver layer tables
 sources:
   - name: silver
-    description: "Silver layer tables containing cleaned and validated data"
+    description: "Silver layer tables containing cleaned and standardized data"
     database: "{{ var('source_database', 'ZOOM_DB') }}"
     schema: "{{ var('source_schema', 'SILVER') }}"
     tables:
       - name: si_users
-        description: "Silver layer users table with user profile information"
+        description: "Silver layer user information table"
         columns:
           - name: user_id
-            description: "Unique identifier for users"
+            description: "Unique identifier for each user"
             tests:
               - not_null
               - unique
@@ -30,7 +24,7 @@ sources:
           - name: company
             description: "Company name associated with the user"
           - name: plan_type
-            description: "Subscription plan type (Basic, Pro, Enterprise)"
+            description: "Subscription plan type (Free, Basic, Pro, Enterprise)"
           - name: user_status
             description: "Current status of the user account"
           - name: load_timestamp
@@ -44,18 +38,161 @@ sources:
           - name: update_date
             description: "Date when record was last updated"
 
+      - name: si_meetings
+        description: "Silver layer meeting information table"
+        columns:
+          - name: meeting_id
+            description: "Unique identifier for each meeting"
+            tests:
+              - not_null
+              - unique
+          - name: host_id
+            description: "User ID of the meeting host"
+            tests:
+              - not_null
+          - name: meeting_topic
+            description: "Topic or title of the meeting"
+          - name: start_time
+            description: "Meeting start timestamp"
+          - name: end_time
+            description: "Meeting end timestamp"
+          - name: duration_minutes
+            description: "Meeting duration in minutes"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded"
+          - name: update_timestamp
+            description: "Timestamp when record was last updated"
+          - name: source_system
+            description: "Source system identifier"
+          - name: load_date
+            description: "Date when record was loaded"
+          - name: update_date
+            description: "Date when record was last updated"
+
+      - name: si_participants
+        description: "Silver layer meeting participants table"
+        columns:
+          - name: participant_id
+            description: "Unique identifier for each participant session"
+            tests:
+              - not_null
+              - unique
+          - name: meeting_id
+            description: "Meeting identifier"
+            tests:
+              - not_null
+          - name: user_id
+            description: "User identifier for the participant"
+          - name: join_time
+            description: "Timestamp when participant joined"
+          - name: leave_time
+            description: "Timestamp when participant left"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded"
+          - name: update_timestamp
+            description: "Timestamp when record was last updated"
+          - name: source_system
+            description: "Source system identifier"
+          - name: load_date
+            description: "Date when record was loaded"
+          - name: update_date
+            description: "Date when record was last updated"
+
+      - name: si_feature_usage
+        description: "Silver layer feature usage tracking table"
+        columns:
+          - name: usage_id
+            description: "Unique identifier for each feature usage event"
+            tests:
+              - not_null
+              - unique
+          - name: meeting_id
+            description: "Meeting identifier where feature was used"
+          - name: feature_name
+            description: "Name of the feature used"
+          - name: usage_count
+            description: "Number of times feature was used"
+          - name: usage_date
+            description: "Date when feature was used"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded"
+          - name: update_timestamp
+            description: "Timestamp when record was last updated"
+          - name: source_system
+            description: "Source system identifier"
+          - name: load_date
+            description: "Date when record was loaded"
+          - name: update_date
+            description: "Date when record was last updated"
+
+      - name: si_webinars
+        description: "Silver layer webinar information table"
+        columns:
+          - name: webinar_id
+            description: "Unique identifier for each webinar"
+            tests:
+              - not_null
+              - unique
+          - name: host_id
+            description: "User ID of the webinar host"
+          - name: webinar_topic
+            description: "Topic or title of the webinar"
+          - name: start_time
+            description: "Webinar start timestamp"
+          - name: end_time
+            description: "Webinar end timestamp"
+          - name: registrants
+            description: "Number of registered participants"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded"
+          - name: update_timestamp
+            description: "Timestamp when record was last updated"
+          - name: source_system
+            description: "Source system identifier"
+          - name: load_date
+            description: "Date when record was loaded"
+          - name: update_date
+            description: "Date when record was last updated"
+
+      - name: si_support_tickets
+        description: "Silver layer support ticket information table"
+        columns:
+          - name: ticket_id
+            description: "Unique identifier for each support ticket"
+            tests:
+              - not_null
+              - unique
+          - name: user_id
+            description: "User ID who created the ticket"
+          - name: ticket_type
+            description: "Type or category of the support ticket"
+          - name: resolution_status
+            description: "Current status of the ticket resolution"
+          - name: open_date
+            description: "Date when ticket was opened"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded"
+          - name: update_timestamp
+            description: "Timestamp when record was last updated"
+          - name: source_system
+            description: "Source system identifier"
+          - name: load_date
+            description: "Date when record was loaded"
+          - name: update_date
+            description: "Date when record was last updated"
+
       - name: si_licenses
-        description: "Silver layer licenses table with license assignment information"
+        description: "Silver layer license information table"
         columns:
           - name: license_id
-            description: "Unique identifier for licenses"
+            description: "Unique identifier for each license"
             tests:
               - not_null
               - unique
           - name: license_type
             description: "Type of license (Basic, Pro, Enterprise)"
           - name: assigned_to_user_id
-            description: "User ID to whom the license is assigned"
+            description: "User ID to whom license is assigned"
           - name: start_date
             description: "License validity start date"
           - name: end_date
@@ -71,85 +208,14 @@ sources:
           - name: update_date
             description: "Date when record was last updated"
 
-      - name: si_meetings
-        description: "Silver layer meetings table with meeting information"
-        columns:
-          - name: meeting_id
-            description: "Unique identifier for meetings"
-          - name: host_id
-            description: "User ID of the meeting host"
-          - name: meeting_topic
-            description: "Topic or title of the meeting"
-          - name: start_time
-            description: "Meeting start timestamp"
-          - name: end_time
-            description: "Meeting end timestamp"
-          - name: duration_minutes
-            description: "Meeting duration in minutes"
-
-      - name: si_participants
-        description: "Silver layer participants table with meeting participation data"
-        columns:
-          - name: participant_id
-            description: "Unique identifier for participants"
-          - name: meeting_id
-            description: "Meeting identifier"
-          - name: user_id
-            description: "User identifier for the participant"
-          - name: join_time
-            description: "Timestamp when participant joined"
-          - name: leave_time
-            description: "Timestamp when participant left"
-
-      - name: si_feature_usage
-        description: "Silver layer feature usage table"
-        columns:
-          - name: usage_id
-            description: "Unique identifier for usage records"
-          - name: meeting_id
-            description: "Meeting identifier"
-          - name: feature_name
-            description: "Name of the feature used"
-          - name: usage_count
-            description: "Number of times feature was used"
-          - name: usage_date
-            description: "Date when feature was used"
-
-      - name: si_webinars
-        description: "Silver layer webinars table"
-        columns:
-          - name: webinar_id
-            description: "Unique identifier for webinars"
-          - name: host_id
-            description: "User ID of the webinar host"
-          - name: webinar_topic
-            description: "Topic or title of the webinar"
-          - name: start_time
-            description: "Webinar start timestamp"
-          - name: end_time
-            description: "Webinar end timestamp"
-          - name: registrants
-            description: "Number of registered participants"
-
-      - name: si_support_tickets
-        description: "Silver layer support tickets table"
-        columns:
-          - name: ticket_id
-            description: "Unique identifier for support tickets"
-          - name: user_id
-            description: "User ID who created the ticket"
-          - name: ticket_type
-            description: "Type or category of the support ticket"
-          - name: resolution_status
-            description: "Current status of the ticket resolution"
-          - name: open_date
-            description: "Date when ticket was opened"
-
       - name: si_billing_events
         description: "Silver layer billing events table"
         columns:
           - name: event_id
-            description: "Unique identifier for billing events"
+            description: "Unique identifier for each billing event"
+            tests:
+              - not_null
+              - unique
           - name: user_id
             description: "User ID associated with the billing event"
           - name: event_type
@@ -157,29 +223,85 @@ sources:
           - name: amount
             description: "Billing amount"
           - name: event_date
-            description: "Date of the billing event"
+            description: "Date when billing event occurred"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded"
+          - name: update_timestamp
+            description: "Timestamp when record was last updated"
+          - name: source_system
+            description: "Source system identifier"
+          - name: load_date
+            description: "Date when record was loaded"
+          - name: update_date
+            description: "Date when record was last updated"
 
-# Model definitions for Gold layer dimension tables
+      - name: si_error_data
+        description: "Silver layer error data table"
+        columns:
+          - name: error_id
+            description: "Unique identifier for each error"
+            tests:
+              - not_null
+          - name: error_type
+            description: "Type or category of error"
+          - name: error_description
+            description: "Detailed description of the error"
+          - name: source_table
+            description: "Table where error occurred"
+          - name: error_timestamp
+            description: "Timestamp when error occurred"
+          - name: process_audit_info
+            description: "Audit information related to the process"
+          - name: status
+            description: "Current status of the error"
+          - name: load_date
+            description: "Date when record was loaded"
+          - name: update_date
+            description: "Date when record was last updated"
+          - name: source_system
+            description: "Source system identifier"
+
+      - name: si_audit
+        description: "Silver layer audit table"
+        columns:
+          - name: execution_id
+            description: "Unique identifier for each execution"
+          - name: pipeline_name
+            description: "Name of the pipeline"
+          - name: start_time
+            description: "Pipeline start timestamp"
+          - name: end_time
+            description: "Pipeline end timestamp"
+          - name: status
+            description: "Pipeline execution status"
+          - name: error_message
+            description: "Error message if any"
+          - name: load_date
+            description: "Date when record was loaded"
+          - name: update_date
+            description: "Date when record was last updated"
+          - name: source_system
+            description: "Source system identifier"
+
+# Model definitions for Gold layer tables
 models:
   - name: go_process_audit
-    description: "Gold layer process audit table for tracking pipeline execution"
+    description: "Gold layer process audit table for pipeline monitoring"
     columns:
-      - name: audit_id
-        description: "Unique identifier for audit records"
+      - name: execution_id
+        description: "Unique identifier for each execution"
         tests:
           - not_null
-      - name: execution_id
-        description: "Unique execution identifier for each pipeline run"
       - name: process_name
         description: "Name of the process being executed"
       - name: pipeline_name
         description: "Name of the pipeline"
       - name: execution_start_time
-        description: "Start time of process execution"
+        description: "Process execution start timestamp"
       - name: execution_end_time
-        description: "End time of process execution"
+        description: "Process execution end timestamp"
       - name: execution_status
-        description: "Status of process execution (RUNNING, COMPLETED, FAILED)"
+        description: "Status of the process execution"
       - name: records_processed
         description: "Number of records processed"
       - name: records_inserted
@@ -189,68 +311,228 @@ models:
       - name: records_failed
         description: "Number of records that failed processing"
       - name: process_duration_seconds
-        description: "Duration of process execution in seconds"
+        description: "Process duration in seconds"
+      - name: created_at
+        description: "Record creation timestamp"
+      - name: updated_at
+        description: "Record last update timestamp"
+      - name: process_status
+        description: "Current status of the process"
 
   - name: go_user_dim
-    description: "Gold layer user dimension table with SCD Type 2 implementation"
+    description: "Gold layer user dimension table with SCD Type 2"
     columns:
-      - name: user_dim_id
-        description: "Surrogate key for user dimension"
-        tests:
-          - not_null
-          - unique
       - name: user_id
-        description: "Business key - unique identifier for users from source system"
+        description: "Business key - User identifier"
         tests:
           - not_null
       - name: user_name
         description: "Display name of the user"
       - name: email
-        description: "Standardized email address (lowercase, trimmed)"
+        description: "Standardized email address"
       - name: company
         description: "Normalized company name"
       - name: plan_type
         description: "Subscription plan type"
-      - name: user_status
-        description: "Current status of the user account"
-      - name: registration_date
-        description: "Date when user registered"
       - name: account_status
-        description: "Derived account status (Active, Inactive, Pending, Unknown)"
+        description: "Derived account status"
       - name: scd_start_date
-        description: "SCD Type 2 - Start date for this version of the record"
+        description: "SCD Type 2 effective start date"
       - name: scd_end_date
-        description: "SCD Type 2 - End date for this version of the record"
+        description: "SCD Type 2 effective end date"
       - name: scd_current_flag
-        description: "SCD Type 2 - Flag indicating if this is the current version"
+        description: "SCD Type 2 current record flag"
+      - name: created_at
+        description: "Record creation timestamp"
+      - name: updated_at
+        description: "Record last update timestamp"
+      - name: process_status
+        description: "Processing status of the record"
 
   - name: go_license_dim
-    description: "Gold layer license dimension table with SCD Type 2 implementation"
+    description: "Gold layer license dimension table with SCD Type 2"
     columns:
-      - name: license_dim_id
-        description: "Surrogate key for license dimension"
-        tests:
-          - not_null
-          - unique
       - name: license_id
-        description: "Business key - unique identifier for licenses from source system"
+        description: "Business key - License identifier"
         tests:
           - not_null
       - name: license_type
-        description: "Type of license (Basic, Pro, Enterprise)"
+        description: "Type of license"
       - name: assigned_to_user_id
-        description: "User ID to whom the license is assigned"
-      - name: start_date
-        description: "License validity start date"
-      - name: end_date
-        description: "License validity end date"
+        description: "User ID to whom license is assigned"
       - name: assignment_status
-        description: "Derived assignment status (Active, Expired, Pending, Unknown)"
+        description: "Derived assignment status based on dates"
       - name: license_capacity
-        description: "Derived license capacity based on license type"
+        description: "License capacity based on type"
       - name: scd_start_date
-        description: "SCD Type 2 - Start date for this version of the record"
+        description: "SCD Type 2 effective start date"
       - name: scd_end_date
-        description: "SCD Type 2 - End date for this version of the record"
+        description: "SCD Type 2 effective end date"
       - name: scd_current_flag
-        description: "SCD Type 2 - Flag indicating if this is the current version"
+        description: "SCD Type 2 current record flag"
+      - name: created_at
+        description: "Record creation timestamp"
+      - name: updated_at
+        description: "Record last update timestamp"
+      - name: process_status
+        description: "Processing status of the record"
+
+  - name: go_meeting_fact
+    description: "Gold layer meeting fact table"
+    columns:
+      - name: meeting_id
+        description: "Business key - Meeting identifier"
+        tests:
+          - not_null
+      - name: host_id
+        description: "Foreign key to user dimension"
+      - name: meeting_topic
+        description: "Meeting topic or title"
+      - name: duration_minutes
+        description: "Meeting duration in minutes"
+      - name: participant_count
+        description: "Number of participants in the meeting"
+      - name: meeting_type
+        description: "Derived meeting type based on participants"
+      - name: created_at
+        description: "Record creation timestamp"
+      - name: updated_at
+        description: "Record last update timestamp"
+      - name: process_status
+        description: "Processing status of the record"
+
+  - name: go_participant_fact
+    description: "Gold layer participant fact table"
+    columns:
+      - name: participant_id
+        description: "Business key - Participant session identifier"
+        tests:
+          - not_null
+      - name: meeting_id
+        description: "Foreign key to meeting fact"
+      - name: user_id
+        description: "Foreign key to user dimension"
+      - name: attendance_duration
+        description: "Participant attendance duration in minutes"
+      - name: attendee_type
+        description: "Derived attendee type based on duration"
+      - name: created_at
+        description: "Record creation timestamp"
+      - name: updated_at
+        description: "Record last update timestamp"
+      - name: process_status
+        description: "Processing status of the record"
+
+  - name: go_feature_usage_fact
+    description: "Gold layer feature usage fact table"
+    columns:
+      - name: usage_id
+        description: "Business key - Feature usage identifier"
+        tests:
+          - not_null
+      - name: meeting_id
+        description: "Foreign key to meeting fact"
+      - name: feature_name
+        description: "Name of the feature used"
+      - name: usage_count
+        description: "Number of times feature was used"
+      - name: feature_category
+        description: "Derived feature category"
+      - name: feature_success_rate
+        description: "Calculated feature success rate"
+      - name: created_at
+        description: "Record creation timestamp"
+      - name: updated_at
+        description: "Record last update timestamp"
+      - name: process_status
+        description: "Processing status of the record"
+
+  - name: go_webinar_fact
+    description: "Gold layer webinar fact table"
+    columns:
+      - name: webinar_id
+        description: "Business key - Webinar identifier"
+        tests:
+          - not_null
+      - name: host_id
+        description: "Foreign key to user dimension"
+      - name: registrants
+        description: "Number of registered participants"
+      - name: actual_attendees
+        description: "Estimated actual attendees"
+      - name: created_at
+        description: "Record creation timestamp"
+      - name: updated_at
+        description: "Record last update timestamp"
+      - name: process_status
+        description: "Processing status of the record"
+
+  - name: go_support_ticket_fact
+    description: "Gold layer support ticket fact table"
+    columns:
+      - name: ticket_id
+        description: "Business key - Support ticket identifier"
+        tests:
+          - not_null
+      - name: user_id
+        description: "Foreign key to user dimension"
+      - name: ticket_type
+        description: "Type of support ticket"
+      - name: priority_level
+        description: "Derived priority level"
+      - name: resolution_time_hours
+        description: "Time taken to resolve in hours"
+      - name: satisfaction_score
+        description: "Customer satisfaction score"
+      - name: created_at
+        description: "Record creation timestamp"
+      - name: updated_at
+        description: "Record last update timestamp"
+      - name: process_status
+        description: "Processing status of the record"
+
+  - name: go_billing_event_fact
+    description: "Gold layer billing event fact table"
+    columns:
+      - name: event_id
+        description: "Business key - Billing event identifier"
+        tests:
+          - not_null
+      - name: user_id
+        description: "Foreign key to user dimension"
+      - name: amount
+        description: "Billing amount"
+      - name: currency
+        description: "Currency code"
+      - name: payment_method
+        description: "Derived payment method"
+      - name: billing_cycle
+        description: "Derived billing cycle"
+      - name: created_at
+        description: "Record creation timestamp"
+      - name: updated_at
+        description: "Record last update timestamp"
+      - name: process_status
+        description: "Processing status of the record"
+
+  - name: go_error_data
+    description: "Gold layer error data table"
+    columns:
+      - name: error_id
+        description: "Error identifier"
+        tests:
+          - not_null
+      - name: error_type
+        description: "Type of error"
+      - name: source_table
+        description: "Table where error occurred"
+      - name: error_severity
+        description: "Derived error severity level"
+      - name: resolution_status
+        description: "Current resolution status"
+      - name: created_at
+        description: "Record creation timestamp"
+      - name: updated_at
+        description: "Record last update timestamp"
+      - name: process_status
+        description: "Processing status of the record"
