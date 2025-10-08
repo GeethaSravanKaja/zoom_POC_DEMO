@@ -1,14 +1,20 @@
+-- =====================================================
+-- Go_User_Dim Model
+-- Description: Gold Layer User Dimension Table with SCD Type 2
+-- Source: Silver.si_users
+-- Author: Data Engineer
+-- =====================================================
+
 {{ config(
     materialized='table',
-    pre_hook="INSERT INTO {{ ref('go_process_audit') }} (execution_id, process_name, pipeline_name, execution_start_time, execution_status, load_date, source_system) SELECT '{{ invocation_id }}', 'go_user_dim', 'gold_dimension_pipeline', CURRENT_TIMESTAMP(), 'STARTED', CURRENT_DATE(), 'DBT_GOLD_PIPELINE' WHERE '{{ this.name }}' != 'go_process_audit'",
-    post_hook="INSERT INTO {{ ref('go_process_audit') }} (execution_id, process_name, pipeline_name, execution_end_time, execution_status, records_processed, load_date, source_system) SELECT '{{ invocation_id }}', 'go_user_dim', 'gold_dimension_pipeline', CURRENT_TIMESTAMP(), 'COMPLETED', (SELECT COUNT(*) FROM {{ this }}), CURRENT_DATE(), 'DBT_GOLD_PIPELINE' WHERE '{{ this.name }}' != 'go_process_audit'"
+    tags=['dimension', 'gold', 'scd2'],
+    on_schema_change='append_new_columns',
+    pre_hook="{% if this.name != 'go_process_audit' %}INSERT INTO {{ ref('go_process_audit') }} (execution_id, process_name, pipeline_name, execution_start_time, execution_status, records_processed, start_time, status, load_date, update_date, source_system) VALUES ('{{ invocation_id }}', 'go_user_dim', 'gold_dimension_pipeline', CURRENT_TIMESTAMP, 'RUNNING', 0, CURRENT_TIMESTAMP, 'ACTIVE', CURRENT_DATE, CURRENT_DATE, 'DBT_PIPELINE'){% endif %}",
+    post_hook="{% if this.name != 'go_process_audit' %}UPDATE {{ ref('go_process_audit') }} SET execution_end_time = CURRENT_TIMESTAMP, execution_status = 'COMPLETED', records_processed = (SELECT COUNT(*) FROM {{ this }}), records_inserted = (SELECT COUNT(*) FROM {{ this }}), process_duration_seconds = DATEDIFF(second, execution_start_time, CURRENT_TIMESTAMP), end_time = CURRENT_TIMESTAMP WHERE execution_id = '{{ invocation_id }}' AND process_name = 'go_user_dim'{% endif %}"
 ) }}
 
--- Gold Layer User Dimension Table
--- Transforms Silver layer user data into Gold dimension with SCD Type 2
--- Source: Silver.si_users
-
-WITH user_source AS (
+-- CTE for data transformation and cleansing
+WITH source_data AS (
     SELECT
         user_id,
         user_name,
@@ -22,77 +28,61 @@ WITH user_source AS (
         load_date,
         update_date
     FROM {{ source('silver', 'si_users') }}
-    WHERE user_id IS NOT NULL
+    WHERE user_id IS NOT NULL -- Data quality check
 ),
 
--- Data quality checks and transformations
-user_transformed AS (
+-- Data transformation with business rules
+transformed_data AS (
     SELECT
         user_id,
-        COALESCE(TRIM(user_name), 'Unknown User') AS user_name,
-        -- Email standardization and validation
-        CASE 
-            WHEN email IS NOT NULL AND email LIKE '%@%' 
-            THEN LOWER(TRIM(email))
-            ELSE 'unknown@domain.com'
-        END AS email,
-        -- Company name normalization
-        CASE 
-            WHEN company IS NOT NULL AND TRIM(company) != ''
-            THEN REGEXP_REPLACE(TRIM(company), '[^a-zA-Z0-9 ]', '')
-            ELSE 'Unknown Company'
-        END AS company,
-        -- Plan type hierarchy mapping
-        CASE 
-            WHEN UPPER(plan_type) IN ('FREE', 'BASIC') THEN 'Basic'
-            WHEN UPPER(plan_type) IN ('PRO', 'PROFESSIONAL') THEN 'Pro'
-            WHEN UPPER(plan_type) IN ('ENTERPRISE', 'BUSINESS') THEN 'Enterprise'
-            ELSE 'Unknown'
-        END AS plan_type,
-        -- Account status derivation
+        COALESCE(user_name, 'Unknown User') AS user_name,
+        LOWER(TRIM(email)) AS email, -- Standardize email format
+        REGEXP_REPLACE(COALESCE(company, 'Unknown Company'), '[^a-zA-Z0-9 ]', '') AS company, -- Normalize company names
+        COALESCE(plan_type, 'Unknown') AS plan_type,
+        COALESCE(user_status, 'Unknown') AS user_status,
+        
+        -- Derive account status based on user_status
         CASE
-            WHEN UPPER(user_status) = 'ACTIVE' THEN 'Active'
-            WHEN UPPER(user_status) IN ('SUSPENDED', 'INACTIVE') THEN 'Inactive'
-            WHEN UPPER(user_status) = 'PENDING' THEN 'Pending'
+            WHEN user_status = 'Active' THEN 'Active'
+            WHEN user_status = 'Suspended' THEN 'Inactive'
+            WHEN user_status = 'Pending' THEN 'Pending'
             ELSE 'Unknown'
         END AS account_status,
-        user_status,
+        
+        -- Derive registration date (using load_date as proxy if not available)
+        COALESCE(load_date, CURRENT_DATE) AS registration_date,
+        
+        -- Audit fields
         load_timestamp,
         update_timestamp,
-        source_system,
         load_date,
         update_date,
+        source_system,
+        
         -- SCD Type 2 fields
-        COALESCE(load_date, CURRENT_DATE()) AS scd_start_date,
+        CURRENT_DATE AS scd_start_date,
         '9999-12-31'::DATE AS scd_end_date,
         TRUE AS scd_current_flag
-    FROM user_source
-),
-
--- Add audit columns and final transformations
-user_final AS (
-    SELECT
-        ROW_NUMBER() OVER (ORDER BY user_id) AS user_dim_id,
-        user_id,
-        user_name,
-        email,
-        company,
-        plan_type,
-        account_status,
-        COALESCE(load_date, CURRENT_DATE()) AS registration_date,
-        load_timestamp,
-        CURRENT_TIMESTAMP() AS update_timestamp,
-        COALESCE(load_date, CURRENT_DATE()) AS load_date,
-        CURRENT_DATE() AS update_date,
-        COALESCE(source_system, 'Silver.si_users') AS source_system,
-        scd_start_date,
-        scd_end_date,
-        scd_current_flag,
-        -- Audit columns
-        CURRENT_TIMESTAMP() AS created_at,
-        CURRENT_TIMESTAMP() AS updated_at,
-        'SUCCESS' AS process_status
-    FROM user_transformed
+    FROM source_data
 )
 
-SELECT * FROM user_final
+-- Final SELECT with all required fields for Go_User_Dim
+SELECT
+    ROW_NUMBER() OVER (ORDER BY user_id) AS user_dim_id,
+    user_id,
+    user_name,
+    email,
+    company,
+    plan_type,
+    user_status,
+    registration_date,
+    account_status,
+    load_timestamp,
+    update_timestamp,
+    load_date,
+    update_date,
+    source_system,
+    scd_start_date,
+    scd_end_date,
+    scd_current_flag
+FROM transformed_data
