@@ -1,0 +1,28 @@
+# DBT Packages Configuration for Zoom Gold Dimension Pipeline
+# This file specifies the external packages required for the project
+
+packages:
+  # dbt-utils: Essential utilities for DBT projects
+  - package: dbt-labs/dbt_utils
+    version: [">=1.0.0", "<2.0.0"]
+    
+  # dbt-expectations: Data quality testing framework
+  - package: calogica/dbt_expectations
+    version: [">=0.8.0", "<1.0.0"]
+    
+  # dbt-audit-helper: Utilities for auditing and comparing data
+  - package: dbt-labs/audit_helper
+    version: [">=0.8.0", "<1.0.0"]
+    
+  # dbt-codegen: Code generation utilities
+  - package: dbt-labs/codegen
+    version: [">=0.9.0", "<1.0.0"]
+
+# Package installation notes:
+# 1. dbt-utils: Provides essential macros like generate_surrogate_key, get_column_values, etc.
+# 2. dbt-expectations: Adds advanced data quality tests beyond standard DBT tests
+# 3. audit-helper: Helps with data validation and comparison between environments
+# 4. codegen: Assists in generating boilerplate code for sources, models, and tests
+#
+# To install these packages, run: dbt deps
+# This will download and install all specified packages in the dbt_packages directory
