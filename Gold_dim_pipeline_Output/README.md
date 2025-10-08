@@ -1,220 +1,259 @@
 # Zoom Gold Dimension Pipeline - DBT Project
 
 ## Overview
-This DBT project transforms data from the Silver Layer into Gold Layer dimension and fact tables within a Snowflake environment for the Zoom Platform Analytics System. The pipeline follows medallion architecture best practices and implements robust error handling, audit logging, and data quality checks.
+This DBT project transforms data from the Silver Layer into Gold Layer dimension tables within a Snowflake environment for the Zoom Platform Analytics System. The pipeline implements production-ready data transformations with comprehensive audit trails, error handling, and data quality monitoring.
+
+## Author
+**AAVA Data Engineering Team**
 
 ## Project Structure
 ```
-Gold_dim_pipeline_Output/
-├── README.md                    # This documentation file
-├── dbt_project.yml             # DBT project configuration
-├── packages.yml                # External package dependencies
-├── schema.yml                  # Source and model definitions
-├── audit_macro.sql             # Reusable macros for audit and transformations
-├── go_process_audit.sql        # Audit table model (foundation)
-├── go_user_dim.sql             # User dimension table (SCD Type 2)
-├── go_license_dim.sql          # License dimension table (SCD Type 2)
-├── go_meeting_fact.sql         # Meeting fact table
-├── go_participant_fact.sql     # Participant fact table
-├── go_feature_usage_fact.sql   # Feature usage fact table
-├── go_webinar_fact.sql         # Webinar fact table
-├── go_support_ticket_fact.sql  # Support ticket fact table
-└── go_billing_event_fact.sql   # Billing event fact table
+zoom_gold_dimension_pipeline/
+├── dbt_project.yml          # DBT project configuration
+├── packages.yml             # Required DBT packages
+├── README.md               # This file
+├── models/
+│   ├── schema.yml          # Sources and models documentation
+│   └── gold_dimensions/
+│       ├── go_process_audit.sql    # Audit table (created first)
+│       ├── go_user_dim.sql         # User dimension (SCD Type 2)
+│       ├── go_license_dim.sql      # License dimension (SCD Type 2)
+│       └── go_error_data.sql       # Error tracking table
+└── macros/
+    └── generate_audit_columns.sql  # Reusable audit macros
 ```
 
-## Data Flow
-1. **Silver Layer Sources**: Clean, validated data from Bronze layer
-2. **Gold Layer Dimensions**: Business-ready dimension tables with SCD Type 2
-3. **Gold Layer Facts**: Aggregated and enriched fact tables for analytics
-4. **Audit & Error Handling**: Comprehensive logging and error tracking
+## Features
 
-## Models Description
+### 🔄 Data Transformation
+- **1:1 Data Mapping**: Direct mapping from Silver to Gold layer with transformations
+- **SCD Type 2**: Slowly Changing Dimensions implementation for historical tracking
+- **Data Quality**: Comprehensive validation and cleansing rules
+- **Error Handling**: Robust error detection and logging mechanisms
 
-### Foundation Models
-- **go_process_audit**: Tracks pipeline execution, performance metrics, and audit information
+### 📊 Audit & Monitoring
+- **Process Audit**: Complete execution tracking with pre/post hooks
+- **Error Tracking**: Detailed error logging and resolution status
+- **Data Lineage**: Full traceability from Silver to Gold layer
+- **Performance Metrics**: Execution time and record count tracking
 
-### Dimension Models (SCD Type 2)
-- **go_user_dim**: User profiles with historical tracking
-- **go_license_dim**: License assignments with status derivation
+### 🛠️ Production Features
+- **Modular Design**: Reusable macros and standardized patterns
+- **Incremental Processing**: Optimized for large-scale data processing
+- **Data Quality Tests**: Comprehensive testing framework
+- **Documentation**: Complete column and table documentation
 
-### Fact Models
-- **go_meeting_fact**: Meeting activities and metrics
-- **go_participant_fact**: Meeting participation details
-- **go_feature_usage_fact**: Feature utilization analytics
-- **go_webinar_fact**: Webinar performance metrics
-- **go_support_ticket_fact**: Customer support analytics
-- **go_billing_event_fact**: Revenue and billing transactions
+## Source Tables (Silver Layer)
 
-## Key Features
+| Table Name | Description | Key Columns |
+|------------|-------------|-------------|
+| `si_users` | User master data | user_id, user_name, email, company, plan_type |
+| `si_licenses` | License information | license_id, license_type, assigned_to_user_id |
+| `si_error_data` | Error tracking data | error_id, error_type, source_table |
 
-### 1. Audit & Error Handling
-- Pre-hook and post-hook audit logging for all models
-- Process execution tracking with start/end times
-- Record count validation and error reporting
-- Conditional hook execution to prevent audit table conflicts
+## Target Tables (Gold Layer)
 
-### 2. Data Quality & Transformations
-- Null value handling and data cleansing
-- Email standardization and text normalization
-- Business rule implementation for derived fields
-- Data type conversions and validations
+| Table Name | Type | Description | SCD Type |
+|------------|------|-------------|----------|
+| `go_process_audit` | Audit | Process execution tracking | N/A |
+| `go_user_dim` | Dimension | User dimension table | Type 2 |
+| `go_license_dim` | Dimension | License dimension table | Type 2 |
+| `go_error_data` | Monitoring | Error and data quality tracking | N/A |
 
-### 3. SCD Type 2 Implementation
-- Historical tracking for dimension tables
-- Effective date management
-- Current flag maintenance
+## Data Transformations
 
-### 4. Performance Optimization
-- Incremental loading strategies
-- Proper indexing and clustering recommendations
-- Efficient SQL with CTEs for readability
+### User Dimension (`go_user_dim`)
+- **Email Standardization**: Lowercase and format validation
+- **Company Normalization**: Remove special characters
+- **Plan Type Mapping**: Standardize to Basic/Pro/Enterprise
+- **Account Status Derivation**: Map user_status to business-friendly values
+- **SCD Type 2**: Track historical changes with effective dates
 
-## Configuration
-
-### Variables
-```yaml
-vars:
-  source_database: 'ZOOM_DB'
-  source_schema: 'SILVER'
-  target_schema: 'GOLD'
-  scd_end_date: '9999-12-31'
-  audit_enabled: true
-```
-
-### Sources
-- **Silver.si_users**: User profile data
-- **Silver.si_licenses**: License assignment data
-- **Silver.si_meetings**: Meeting information
-- **Silver.si_participants**: Meeting participation
-- **Silver.si_feature_usage**: Feature utilization
-- **Silver.si_webinars**: Webinar data
-- **Silver.si_support_tickets**: Support tickets
-- **Silver.si_billing_events**: Billing transactions
+### License Dimension (`go_license_dim`)
+- **License Type Mapping**: Standardize license categories
+- **Assignment Status**: Derive status based on date ranges
+- **Capacity Calculation**: Set capacity based on license type
+- **Date Validation**: Ensure valid date ranges
+- **SCD Type 2**: Track license assignment history
 
 ## Installation & Setup
 
-### 1. Install Dependencies
-```bash
-dbt deps
-```
+### Prerequisites
+- DBT Core 1.0+ or DBT Cloud
+- Snowflake account with appropriate permissions
+- Access to Silver layer schema
 
-### 2. Configure Profile
-Create/update your `profiles.yml` with Snowflake connection details:
-```yaml
-zoom_gold_dimension_pipeline:
-  target: dev
-  outputs:
-    dev:
-      type: snowflake
-      account: [your_account]
-      user: [your_user]
-      password: [your_password]
-      role: [your_role]
-      database: ZOOM_DB
-      warehouse: [your_warehouse]
-      schema: GOLD
-      threads: 4
-```
+### Installation Steps
 
-### 3. Test Connection
-```bash
-dbt debug
-```
+1. **Clone/Download the project files**
 
-### 4. Run Models
+2. **Install DBT packages**
+   ```bash
+   dbt deps
+   ```
+
+3. **Configure profiles.yml**
+   ```yaml
+   zoom_gold_dimension_pipeline:
+     target: dev
+     outputs:
+       dev:
+         type: snowflake
+         account: your_account
+         user: your_user
+         password: your_password
+         role: your_role
+         database: your_database
+         warehouse: your_warehouse
+         schema: gold
+         threads: 4
+   ```
+
+4. **Set up variables in dbt_project.yml or via CLI**
+   ```yaml
+   vars:
+     silver_schema: 'silver'
+     gold_schema: 'gold'
+   ```
+
+## Execution
+
+### Full Refresh
 ```bash
-# Run all models
-dbt run
+# Run all models with full refresh
+dbt run --full-refresh
 
 # Run specific model
-dbt run --select go_user_dim
-
-# Run with full refresh
-dbt run --full-refresh
+dbt run --models go_user_dim --full-refresh
 ```
 
-### 5. Run Tests
+### Incremental Run
 ```bash
+# Run all models incrementally
+dbt run
+
+# Run only dimension models
+dbt run --models tag:dimension
+```
+
+### Testing
+```bash
+# Run all tests
 dbt test
+
+# Run tests for specific model
+dbt test --models go_user_dim
 ```
 
-## Execution Order
-The models are designed to run in the following order:
-1. `go_process_audit` (foundation)
-2. Dimension models (`go_user_dim`, `go_license_dim`)
-3. Fact models (all fact tables)
-
-## Data Lineage
-```
-Silver Layer → Gold Dimensions → Gold Facts → Analytics/BI
-     ↓              ↓              ↓
-  Cleansed    Business Rules   Aggregated
-   Data        Applied         Metrics
+### Documentation
+```bash
+# Generate and serve documentation
+dbt docs generate
+dbt docs serve
 ```
 
-## Monitoring & Maintenance
+## Model Dependencies
 
-### Audit Queries
-```sql
--- Check pipeline execution status
-SELECT * FROM GOLD.go_process_audit 
-WHERE execution_start_time >= CURRENT_DATE - 7
-ORDER BY execution_start_time DESC;
-
--- Monitor data quality
-SELECT 
-    process_name,
-    AVG(records_processed) as avg_records,
-    AVG(process_duration_seconds) as avg_duration
-FROM GOLD.go_process_audit 
-WHERE execution_status = 'COMPLETED'
-GROUP BY process_name;
+```
+go_process_audit (runs first - no dependencies)
+    ↓
+go_user_dim (depends on go_process_audit for audit hooks)
+    ↓
+go_license_dim (depends on go_process_audit for audit hooks)
+    ↓
+go_error_data (depends on go_process_audit for audit hooks)
 ```
 
-### Performance Monitoring
-- Monitor execution times in audit table
-- Track record counts and processing rates
-- Review error logs for data quality issues
+## Audit Trail
 
-## Best Practices Implemented
+Every model execution is tracked in `go_process_audit` with:
+- Execution ID and timestamps
+- Record counts (processed, inserted, updated, failed)
+- Execution duration
+- Success/failure status
+- Error messages (if any)
 
-1. **Modular Design**: Each model is self-contained with clear dependencies
-2. **Error Handling**: Comprehensive audit logging and error tracking
-3. **Data Quality**: Input validation and cleansing rules
-4. **Documentation**: Extensive comments and metadata
-5. **Testing**: Built-in data quality tests
-6. **Performance**: Optimized SQL and materialization strategies
-7. **Maintainability**: Clear naming conventions and structure
+## Error Handling
+
+The pipeline includes comprehensive error handling:
+- **Data Validation**: Check for null values, data types, and business rules
+- **Error Logging**: All errors logged to `go_error_data` table
+- **Graceful Degradation**: Invalid records are excluded but logged
+- **Monitoring**: Error severity levels and resolution tracking
+
+## Data Quality Tests
+
+- **Not Null**: Critical fields must have values
+- **Unique**: Business keys must be unique
+- **Accepted Values**: Enumerated fields validated against allowed values
+- **Referential Integrity**: Foreign key relationships validated
+- **Custom Tests**: Business-specific validation rules
+
+## Performance Optimization
+
+- **Incremental Models**: Process only changed records
+- **Clustering**: Tables clustered on frequently queried columns
+- **Partitioning**: Date-based partitioning for time-series data
+- **Materialization**: Optimized materialization strategies
+
+## Monitoring & Alerting
+
+Monitor the pipeline using:
+- `go_process_audit` table for execution metrics
+- `go_error_data` table for data quality issues
+- DBT test results for validation failures
+- Snowflake query history for performance monitoring
 
 ## Troubleshooting
 
 ### Common Issues
-1. **Audit table conflicts**: Ensure `go_process_audit` runs first
-2. **Source data missing**: Verify Silver layer table availability
-3. **Permission errors**: Check Snowflake role permissions
-4. **Performance issues**: Review warehouse sizing and clustering
+
+1. **Permission Errors**
+   - Ensure proper Snowflake roles and permissions
+   - Verify schema access for both Silver and Gold layers
+
+2. **Source Table Not Found**
+   - Check Silver schema configuration
+   - Verify table names match source definitions
+
+3. **Audit Hook Failures**
+   - Ensure `go_process_audit` table exists and is accessible
+   - Check for circular dependencies
+
+4. **Data Quality Failures**
+   - Review `go_error_data` table for specific issues
+   - Check source data quality in Silver layer
 
 ### Debug Commands
+
 ```bash
-# Compile models without running
-dbt compile
+# Debug specific model
+dbt run --models go_user_dim --debug
 
-# Run specific model with debug
-dbt run --select go_user_dim --debug
+# Compile without running
+dbt compile --models go_user_dim
 
-# Check model dependencies
-dbt list --select +go_user_dim+
+# Show model dependencies
+dbt list --models go_user_dim --output name
 ```
 
-## Support
-For questions or issues:
-1. Check the audit logs in `go_process_audit` table
-2. Review DBT logs in `target/` directory
-3. Validate source data in Silver layer
-4. Contact the Data Engineering team
-
 ## Version History
-- **v1.0.0**: Initial release with core dimension and fact models
-- Includes comprehensive audit logging and error handling
-- Implements SCD Type 2 for dimension tables
-- Production-ready with full documentation
+
+| Version | Date | Changes |
+|---------|------|----------|
+| 1.0 | 2024 | Initial production release |
+
+## Support
+
+For questions or issues:
+1. Check the troubleshooting section
+2. Review audit logs in `go_process_audit`
+3. Contact the AAVA Data Engineering Team
+
+## License
+
+This project is proprietary to AAVA and intended for internal use only.
+
+---
+
+**Note**: This pipeline is designed for production use with comprehensive error handling, audit trails, and data quality monitoring. Always test in a development environment before deploying to production.
