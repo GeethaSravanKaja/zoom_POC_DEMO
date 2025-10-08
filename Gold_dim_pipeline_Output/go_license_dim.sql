@@ -1,20 +1,23 @@
--- =====================================================
--- Go_License_Dim Model
--- Description: Gold Layer License Dimension Table with SCD Type 2
--- Source: Silver.si_licenses
--- Author: Data Engineer
--- =====================================================
-
 {{ config(
     materialized='table',
-    tags=['dimension', 'gold', 'scd2'],
-    on_schema_change='append_new_columns',
-    pre_hook="{% if this.name != 'go_process_audit' %}INSERT INTO {{ ref('go_process_audit') }} (execution_id, process_name, pipeline_name, execution_start_time, execution_status, records_processed, start_time, status, load_date, update_date, source_system) VALUES ('{{ invocation_id }}', 'go_license_dim', 'gold_dimension_pipeline', CURRENT_TIMESTAMP, 'RUNNING', 0, CURRENT_TIMESTAMP, 'ACTIVE', CURRENT_DATE, CURRENT_DATE, 'DBT_PIPELINE'){% endif %}",
-    post_hook="{% if this.name != 'go_process_audit' %}UPDATE {{ ref('go_process_audit') }} SET execution_end_time = CURRENT_TIMESTAMP, execution_status = 'COMPLETED', records_processed = (SELECT COUNT(*) FROM {{ this }}), records_inserted = (SELECT COUNT(*) FROM {{ this }}), process_duration_seconds = DATEDIFF(second, execution_start_time, CURRENT_TIMESTAMP), end_time = CURRENT_TIMESTAMP WHERE execution_id = '{{ invocation_id }}' AND process_name = 'go_license_dim'{% endif %}"
+    tags=['dimension', 'scd2', 'gold'],
+    pre_hook="{% if this.name != 'go_process_audit' %}INSERT INTO {{ ref('go_process_audit') }} (execution_id, process_name, pipeline_name, execution_start_time, execution_status, source_system, created_at, process_status) VALUES ('{{ invocation_id }}', 'go_license_dim', 'Gold_Dimension_Pipeline', CURRENT_TIMESTAMP, 'RUNNING', 'DBT_Gold_Pipeline', CURRENT_TIMESTAMP, 'ACTIVE'){% endif %}",
+    post_hook="{% if this.name != 'go_process_audit' %}UPDATE {{ ref('go_process_audit') }} SET execution_end_time = CURRENT_TIMESTAMP, execution_status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP, records_processed = (SELECT COUNT(*) FROM {{ this }}) WHERE execution_id = '{{ invocation_id }}' AND process_name = 'go_license_dim'{% endif %}"
 ) }}
 
--- CTE for data transformation and cleansing
-WITH source_data AS (
+/*
+_____________________________________________
+## *Author*: AAVA Data Engineering Team
+## *Created on*: {{ run_started_at }}
+## *Description*: Gold Layer License Dimension Table - DBT Model
+## *Version*: 1.0
+## *Purpose*: SCD Type 2 License Dimension for analytics and reporting
+## *Source*: Silver.si_licenses
+_____________________________________________
+*/
+
+-- CTE for source data extraction and cleansing
+WITH license_source AS (
     SELECT
         license_id,
         license_type,
@@ -27,18 +30,21 @@ WITH source_data AS (
         load_date,
         update_date
     FROM {{ source('silver', 'si_licenses') }}
-    WHERE license_id IS NOT NULL -- Data quality check
+    WHERE license_id IS NOT NULL  -- Data quality filter
 ),
 
--- Data transformation with business rules
-transformed_data AS (
+-- Data transformation and business logic
+license_transformed AS (
     SELECT
         license_id,
-        COALESCE(license_type, 'Unknown') AS license_type,
+        CASE 
+            WHEN UPPER(license_type) IN ('BASIC', 'PRO', 'ENTERPRISE', 'FREE') 
+            THEN UPPER(license_type)
+            ELSE 'UNKNOWN'
+        END AS license_type,
         assigned_to_user_id,
         start_date,
         end_date,
-        
         -- Derive assignment status based on dates
         CASE
             WHEN end_date < CURRENT_DATE THEN 'Expired'
@@ -46,32 +52,45 @@ transformed_data AS (
             WHEN start_date > CURRENT_DATE THEN 'Pending'
             ELSE 'Unknown'
         END AS assignment_status,
-        
-        -- Calculate license capacity based on license type
-        CASE
-            WHEN UPPER(license_type) LIKE '%BASIC%' THEN 100
-            WHEN UPPER(license_type) LIKE '%PRO%' THEN 500
-            WHEN UPPER(license_type) LIKE '%ENTERPRISE%' THEN 1000
-            ELSE 50
+        -- Calculate license capacity based on type
+        CASE 
+            WHEN UPPER(license_type) = 'FREE' THEN 100
+            WHEN UPPER(license_type) = 'BASIC' THEN 500
+            WHEN UPPER(license_type) = 'PRO' THEN 1000
+            WHEN UPPER(license_type) = 'ENTERPRISE' THEN 10000
+            ELSE 0
         END AS license_capacity,
-        
-        -- Audit fields
         load_timestamp,
         update_timestamp,
+        COALESCE(source_system, 'Silver.si_licenses') AS source_system,
         load_date,
         update_date,
-        source_system,
-        
         -- SCD Type 2 fields
-        CURRENT_DATE AS scd_start_date,
+        COALESCE(start_date, load_date, CURRENT_DATE) AS scd_start_date,
         '9999-12-31'::DATE AS scd_end_date,
-        TRUE AS scd_current_flag
-    FROM source_data
+        TRUE AS scd_current_flag,
+        -- Audit fields
+        CURRENT_TIMESTAMP AS created_at,
+        CURRENT_TIMESTAMP AS updated_at,
+        'ACTIVE' AS process_status
+    FROM license_source
+),
+
+-- Data validation and error handling
+license_validated AS (
+    SELECT *,
+        CASE 
+            WHEN license_id IS NULL OR license_id = '' THEN 'Missing License ID'
+            WHEN license_type IS NULL OR license_type = '' THEN 'Missing License Type'
+            WHEN start_date IS NULL THEN 'Missing Start Date'
+            WHEN end_date IS NOT NULL AND end_date < start_date THEN 'Invalid Date Range'
+            ELSE 'Valid'
+        END AS data_quality_status
+    FROM license_transformed
 )
 
--- Final SELECT with all required fields for Go_License_Dim
+-- Final select with all required columns for Gold layer
 SELECT
-    ROW_NUMBER() OVER (ORDER BY license_id) AS license_dim_id,
     license_id,
     license_type,
     assigned_to_user_id,
@@ -86,5 +105,12 @@ SELECT
     source_system,
     scd_start_date,
     scd_end_date,
-    scd_current_flag
-FROM transformed_data
+    scd_current_flag,
+    created_at,
+    updated_at,
+    process_status
+FROM license_validated
+WHERE data_quality_status = 'Valid'  -- Only include valid records
+
+-- Order by license_id for consistent processing
+ORDER BY license_id
