@@ -1,20 +1,23 @@
--- =====================================================
--- Go_User_Dim Model
--- Description: Gold Layer User Dimension Table with SCD Type 2
--- Source: Silver.si_users
--- Author: Data Engineer
--- =====================================================
-
 {{ config(
     materialized='table',
-    tags=['dimension', 'gold', 'scd2'],
-    on_schema_change='append_new_columns',
-    pre_hook="{% if this.name != 'go_process_audit' %}INSERT INTO {{ ref('go_process_audit') }} (execution_id, process_name, pipeline_name, execution_start_time, execution_status, records_processed, start_time, status, load_date, update_date, source_system) VALUES ('{{ invocation_id }}', 'go_user_dim', 'gold_dimension_pipeline', CURRENT_TIMESTAMP, 'RUNNING', 0, CURRENT_TIMESTAMP, 'ACTIVE', CURRENT_DATE, CURRENT_DATE, 'DBT_PIPELINE'){% endif %}",
-    post_hook="{% if this.name != 'go_process_audit' %}UPDATE {{ ref('go_process_audit') }} SET execution_end_time = CURRENT_TIMESTAMP, execution_status = 'COMPLETED', records_processed = (SELECT COUNT(*) FROM {{ this }}), records_inserted = (SELECT COUNT(*) FROM {{ this }}), process_duration_seconds = DATEDIFF(second, execution_start_time, CURRENT_TIMESTAMP), end_time = CURRENT_TIMESTAMP WHERE execution_id = '{{ invocation_id }}' AND process_name = 'go_user_dim'{% endif %}"
+    tags=['dimension', 'scd2', 'gold'],
+    pre_hook="{% if this.name != 'go_process_audit' %}INSERT INTO {{ ref('go_process_audit') }} (execution_id, process_name, pipeline_name, execution_start_time, execution_status, source_system, created_at, process_status) VALUES ('{{ invocation_id }}', 'go_user_dim', 'Gold_Dimension_Pipeline', CURRENT_TIMESTAMP, 'RUNNING', 'DBT_Gold_Pipeline', CURRENT_TIMESTAMP, 'ACTIVE'){% endif %}",
+    post_hook="{% if this.name != 'go_process_audit' %}UPDATE {{ ref('go_process_audit') }} SET execution_end_time = CURRENT_TIMESTAMP, execution_status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP, records_processed = (SELECT COUNT(*) FROM {{ this }}) WHERE execution_id = '{{ invocation_id }}' AND process_name = 'go_user_dim'{% endif %}"
 ) }}
 
--- CTE for data transformation and cleansing
-WITH source_data AS (
+/*
+_____________________________________________
+## *Author*: AAVA Data Engineering Team
+## *Created on*: {{ run_started_at }}
+## *Description*: Gold Layer User Dimension Table - DBT Model
+## *Version*: 1.0
+## *Purpose*: SCD Type 2 User Dimension for analytics and reporting
+## *Source*: Silver.si_users
+_____________________________________________
+*/
+
+-- CTE for source data extraction and cleansing
+WITH user_source AS (
     SELECT
         user_id,
         user_name,
@@ -28,47 +31,59 @@ WITH source_data AS (
         load_date,
         update_date
     FROM {{ source('silver', 'si_users') }}
-    WHERE user_id IS NOT NULL -- Data quality check
+    WHERE user_id IS NOT NULL  -- Data quality filter
 ),
 
--- Data transformation with business rules
-transformed_data AS (
+-- Data transformation and standardization
+user_transformed AS (
     SELECT
         user_id,
-        COALESCE(user_name, 'Unknown User') AS user_name,
-        LOWER(TRIM(email)) AS email, -- Standardize email format
-        REGEXP_REPLACE(COALESCE(company, 'Unknown Company'), '[^a-zA-Z0-9 ]', '') AS company, -- Normalize company names
-        COALESCE(plan_type, 'Unknown') AS plan_type,
-        COALESCE(user_status, 'Unknown') AS user_status,
-        
-        -- Derive account status based on user_status
+        COALESCE(TRIM(user_name), 'Unknown User') AS user_name,
+        LOWER(TRIM(email)) AS email,  -- Standardize email format
+        REGEXP_REPLACE(COALESCE(TRIM(company), 'Unknown Company'), '[^a-zA-Z0-9 ]', '') AS company,  -- Normalize company names
+        CASE 
+            WHEN UPPER(plan_type) IN ('FREE', 'BASIC', 'PRO', 'ENTERPRISE') 
+            THEN UPPER(plan_type)
+            ELSE 'UNKNOWN'
+        END AS plan_type,
         CASE
-            WHEN user_status = 'Active' THEN 'Active'
-            WHEN user_status = 'Suspended' THEN 'Inactive'
-            WHEN user_status = 'Pending' THEN 'Pending'
+            WHEN UPPER(user_status) = 'ACTIVE' THEN 'Active'
+            WHEN UPPER(user_status) IN ('SUSPENDED', 'INACTIVE') THEN 'Inactive'
+            WHEN UPPER(user_status) = 'PENDING' THEN 'Pending'
             ELSE 'Unknown'
         END AS account_status,
-        
-        -- Derive registration date (using load_date as proxy if not available)
+        user_status,
         COALESCE(load_date, CURRENT_DATE) AS registration_date,
-        
-        -- Audit fields
         load_timestamp,
         update_timestamp,
+        COALESCE(source_system, 'Silver.si_users') AS source_system,
         load_date,
         update_date,
-        source_system,
-        
         -- SCD Type 2 fields
-        CURRENT_DATE AS scd_start_date,
+        COALESCE(load_date, CURRENT_DATE) AS scd_start_date,
         '9999-12-31'::DATE AS scd_end_date,
-        TRUE AS scd_current_flag
-    FROM source_data
+        TRUE AS scd_current_flag,
+        -- Audit fields
+        CURRENT_TIMESTAMP AS created_at,
+        CURRENT_TIMESTAMP AS updated_at,
+        'ACTIVE' AS process_status
+    FROM user_source
+),
+
+-- Data validation and error handling
+user_validated AS (
+    SELECT *,
+        CASE 
+            WHEN email IS NULL OR email = '' THEN 'Missing Email'
+            WHEN NOT REGEXP_LIKE(email, '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$') THEN 'Invalid Email Format'
+            WHEN user_name IS NULL OR user_name = '' THEN 'Missing User Name'
+            ELSE 'Valid'
+        END AS data_quality_status
+    FROM user_transformed
 )
 
--- Final SELECT with all required fields for Go_User_Dim
+-- Final select with all required columns for Gold layer
 SELECT
-    ROW_NUMBER() OVER (ORDER BY user_id) AS user_dim_id,
     user_id,
     user_name,
     email,
@@ -84,5 +99,12 @@ SELECT
     source_system,
     scd_start_date,
     scd_end_date,
-    scd_current_flag
-FROM transformed_data
+    scd_current_flag,
+    created_at,
+    updated_at,
+    process_status
+FROM user_validated
+WHERE data_quality_status = 'Valid'  -- Only include valid records
+
+-- Order by user_id for consistent processing
+ORDER BY user_id
