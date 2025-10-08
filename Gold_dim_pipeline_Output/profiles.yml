@@ -1,0 +1,56 @@
+# DBT Profiles Configuration for Zoom Gold Pipeline
+# This file should be placed in ~/.dbt/ directory or specified via --profiles-dir
+# Update the connection details according to your Snowflake environment
+
+zoom_gold_pipeline:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"  # e.g., 'xy12345.us-east-1'
+      user: "{{ env_var('SNOWFLAKE_USER') }}"        # Your Snowflake username
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}" # Your Snowflake password
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'TRANSFORMER') }}"     # Default role for transformations
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'ZOOM_DB') }}" # Target database
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH') }}" # Compute warehouse
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA', 'GOLD') }}"        # Target schema
+      threads: 4                                     # Number of concurrent threads
+      client_session_keep_alive: true               # Keep session alive
+      query_tag: "dbt-zoom-gold-pipeline"           # Query tag for monitoring
+      
+    prod:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT_PROD') }}"
+      user: "{{ env_var('SNOWFLAKE_USER_PROD') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD_PROD') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE_PROD', 'TRANSFORMER_PROD') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE_PROD', 'ZOOM_DB_PROD') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE_PROD', 'COMPUTE_WH_LARGE') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA_PROD', 'GOLD') }}"
+      threads: 8
+      client_session_keep_alive: true
+      query_tag: "dbt-zoom-gold-pipeline-prod"
+      
+    test:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT_TEST') }}"
+      user: "{{ env_var('SNOWFLAKE_USER_TEST') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD_TEST') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE_TEST', 'TRANSFORMER_TEST') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE_TEST', 'ZOOM_DB_TEST') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE_TEST', 'COMPUTE_WH_SMALL') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA_TEST', 'GOLD_TEST') }}"
+      threads: 2
+      client_session_keep_alive: true
+      query_tag: "dbt-zoom-gold-pipeline-test"
+
+# Environment Variables Required:
+# SNOWFLAKE_ACCOUNT: Your Snowflake account identifier
+# SNOWFLAKE_USER: Your Snowflake username
+# SNOWFLAKE_PASSWORD: Your Snowflake password
+# SNOWFLAKE_ROLE: Your Snowflake role (optional, defaults provided)
+# SNOWFLAKE_DATABASE: Target database name (optional, defaults provided)
+# SNOWFLAKE_WAREHOUSE: Compute warehouse name (optional, defaults provided)
+# SNOWFLAKE_SCHEMA: Target schema name (optional, defaults provided)
+
+# For production and test environments, use corresponding _PROD and _TEST suffixed variables
