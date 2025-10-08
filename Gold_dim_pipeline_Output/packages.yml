@@ -1,25 +1,23 @@
-# DBT Packages Configuration for Zoom Gold Dimension Pipeline
-# Author: AAVA Data Engineering Team
-# Description: Required packages for production-ready DBT transformations
-# Version: 1.0
+# DBT Packages Configuration for Zoom Gold Pipeline
+# This file specifies external packages required for the project
 
 packages:
-  # dbt-utils: Essential utilities for data transformations
+  # dbt-utils: Essential utilities for DBT projects
   - package: dbt-labs/dbt_utils
-    version: [">=1.0.0", "<2.0.0"]
+    version: 1.1.1
     
   # dbt-expectations: Data quality testing framework
   - package: calogica/dbt_expectations
-    version: [">=0.8.0", "<1.0.0"]
+    version: 0.10.1
     
-  # dbt-audit-helper: Audit and comparison utilities
+  # dbt-audit-helper: Helps with data validation and comparison
   - package: dbt-labs/audit_helper
-    version: [">=0.5.0", "<1.0.0"]
+    version: 0.9.0
     
   # dbt-codegen: Code generation utilities
   - package: dbt-labs/codegen
-    version: [">=0.9.0", "<1.0.0"]
+    version: 0.12.1
     
-  # dbt-date: Date manipulation utilities
-  - package: calogica/dbt_date
-    version: [">=0.7.0", "<1.0.0"]
+  # Elementary: Data observability and monitoring
+  - package: elementary-data/elementary
+    version: 0.13.2
