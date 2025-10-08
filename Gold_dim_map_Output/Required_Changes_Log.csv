@@ -1,0 +1,4 @@
+Agent Name,Required Changes
+Senior Data Modeler,Transformation rules for Dimension tables in the Gold Layer of the Zoom Platform Analytics System. Includes SQL transformation logic, normalization, hierarchy mapping, and SCD Type 2 implementation.
+AAVA,Gold layer Dimension table Data Mapping for Zoom Platform Analytics System. Includes clustering keys, partition pruning, SCD Type 2, and recommendations from previous agent output.
+AAVA,Gold Layer Data Mapping Reviewer for Zoom Platform Analytics System. Review confirms correct mapping, validation, cleansing, and compliance with Snowflake best practices.
