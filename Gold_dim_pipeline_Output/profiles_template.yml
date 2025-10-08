@@ -1,0 +1,44 @@
+# DBT Profiles Configuration Template for Zoom Gold Dimension Pipeline
+# Copy this file to ~/.dbt/profiles.yml and update with your Snowflake credentials
+
+zoom_gold_dimension_pipeline:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: [YOUR_SNOWFLAKE_ACCOUNT]  # e.g., abc12345.us-east-1
+      user: [YOUR_USERNAME]             # Your Snowflake username
+      password: [YOUR_PASSWORD]         # Your Snowflake password
+      role: [YOUR_ROLE]                 # e.g., SYSADMIN, ACCOUNTADMIN
+      database: [YOUR_DATABASE]         # e.g., ZOOM_ANALYTICS
+      warehouse: [YOUR_WAREHOUSE]       # e.g., COMPUTE_WH
+      schema: gold                      # Target schema for Gold layer
+      threads: 4                        # Number of concurrent threads
+      client_session_keep_alive: false
+      query_tag: dbt_zoom_gold_pipeline
+      
+    prod:
+      type: snowflake
+      account: [YOUR_SNOWFLAKE_ACCOUNT]
+      user: [YOUR_PROD_USERNAME]
+      password: [YOUR_PROD_PASSWORD]
+      role: [YOUR_PROD_ROLE]
+      database: [YOUR_PROD_DATABASE]
+      warehouse: [YOUR_PROD_WAREHOUSE]
+      schema: gold
+      threads: 8
+      client_session_keep_alive: false
+      query_tag: dbt_zoom_gold_pipeline_prod
+
+# Configuration Notes:
+# 1. Replace all [YOUR_*] placeholders with actual values
+# 2. Ensure your Snowflake user has necessary permissions:
+#    - SELECT on Silver schema tables
+#    - CREATE, INSERT, UPDATE, DELETE on Gold schema
+#    - USAGE on database and warehouse
+# 3. For production, consider using key-pair authentication:
+#    - Remove password field
+#    - Add private_key_path: /path/to/private_key.p8
+#    - Add private_key_passphrase: [YOUR_PASSPHRASE] (if encrypted)
+# 4. Adjust thread count based on your warehouse size
+# 5. Set appropriate query_tag for monitoring and cost allocation
