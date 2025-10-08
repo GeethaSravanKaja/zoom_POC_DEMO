@@ -1,2 +1,4 @@
 Agent Name,Required Changes
 Gold Layer Logical Data Model Agent,Mode 2 Workflow Executed
+Senior Data Modeler,Ensure the logical output is successfully written to GitHub and aligned with the silver logical model
+Gold Layer Physical Data Model Agent,Ensure the physical output is successfully written to GitHub and aligned with the silver physical model
