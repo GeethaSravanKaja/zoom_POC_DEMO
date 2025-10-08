@@ -1,14 +1,20 @@
+-- =====================================================
+-- Go_Feature_Usage_Fact Model
+-- Description: Gold Layer Feature Usage Fact Table
+-- Source: Silver.si_feature_usage
+-- Author: Data Engineer
+-- =====================================================
+
 {{ config(
     materialized='table',
-    pre_hook="INSERT INTO {{ ref('go_process_audit') }} (execution_id, process_name, pipeline_name, execution_start_time, execution_status, load_date, source_system) SELECT '{{ invocation_id }}', 'go_feature_usage_fact', 'gold_dimension_pipeline', CURRENT_TIMESTAMP(), 'STARTED', CURRENT_DATE(), 'DBT_GOLD_PIPELINE' WHERE '{{ this.name }}' != 'go_process_audit'",
-    post_hook="INSERT INTO {{ ref('go_process_audit') }} (execution_id, process_name, pipeline_name, execution_end_time, execution_status, records_processed, load_date, source_system) SELECT '{{ invocation_id }}', 'go_feature_usage_fact', 'gold_dimension_pipeline', CURRENT_TIMESTAMP(), 'COMPLETED', (SELECT COUNT(*) FROM {{ this }}), CURRENT_DATE(), 'DBT_GOLD_PIPELINE' WHERE '{{ this.name }}' != 'go_process_audit'"
+    tags=['fact', 'gold', 'feature_usage'],
+    on_schema_change='append_new_columns',
+    pre_hook="{% if this.name != 'go_process_audit' %}INSERT INTO {{ ref('go_process_audit') }} (execution_id, process_name, pipeline_name, execution_start_time, execution_status, records_processed, start_time, status, load_date, update_date, source_system) VALUES ('{{ invocation_id }}', 'go_feature_usage_fact', 'gold_dimension_pipeline', CURRENT_TIMESTAMP, 'RUNNING', 0, CURRENT_TIMESTAMP, 'ACTIVE', CURRENT_DATE, CURRENT_DATE, 'DBT_PIPELINE'){% endif %}",
+    post_hook="{% if this.name != 'go_process_audit' %}UPDATE {{ ref('go_process_audit') }} SET execution_end_time = CURRENT_TIMESTAMP, execution_status = 'COMPLETED', records_processed = (SELECT COUNT(*) FROM {{ this }}), records_inserted = (SELECT COUNT(*) FROM {{ this }}), process_duration_seconds = DATEDIFF(second, execution_start_time, CURRENT_TIMESTAMP), end_time = CURRENT_TIMESTAMP WHERE execution_id = '{{ invocation_id }}' AND process_name = 'go_feature_usage_fact'{% endif %}"
 ) }}
 
--- Gold Layer Feature Usage Fact Table
--- Transforms Silver layer feature usage data into Gold fact table
--- Source: Silver.si_feature_usage
-
-WITH feature_usage_source AS (
+-- CTE for data transformation and cleansing
+WITH source_data AS (
     SELECT
         usage_id,
         meeting_id,
@@ -21,67 +27,65 @@ WITH feature_usage_source AS (
         load_date,
         update_date
     FROM {{ source('silver', 'si_feature_usage') }}
-    WHERE usage_id IS NOT NULL
+    WHERE usage_id IS NOT NULL -- Data quality check
 ),
 
--- Data transformations and enrichment
-feature_usage_transformed AS (
+-- Data transformation with business rules
+transformed_data AS (
     SELECT
-        usage_id,
-        COALESCE(meeting_id, 'UNKNOWN_MEETING') AS meeting_id,
-        COALESCE(TRIM(feature_name), 'Unknown Feature') AS feature_name,
-        COALESCE(usage_count, 0) AS usage_count,
-        usage_date,
-        -- Derive usage duration (estimated based on usage count)
-        CASE 
-            WHEN usage_count > 0 THEN usage_count * 2 -- Assume 2 minutes per usage
-            ELSE 0
-        END AS usage_duration,
-        -- Categorize features
-        CASE 
-            WHEN UPPER(feature_name) LIKE '%SCREEN%SHARE%' OR UPPER(feature_name) LIKE '%SHARE%SCREEN%' THEN 'Screen Sharing'
-            WHEN UPPER(feature_name) LIKE '%CHAT%' OR UPPER(feature_name) LIKE '%MESSAGE%' THEN 'Communication'
-            WHEN UPPER(feature_name) LIKE '%RECORD%' THEN 'Recording'
-            WHEN UPPER(feature_name) LIKE '%WHITEBOARD%' OR UPPER(feature_name) LIKE '%ANNOTATION%' THEN 'Collaboration'
-            WHEN UPPER(feature_name) LIKE '%BREAKOUT%' THEN 'Breakout Rooms'
-            WHEN UPPER(feature_name) LIKE '%POLL%' OR UPPER(feature_name) LIKE '%QUIZ%' THEN 'Engagement'
-            ELSE 'Other'
-        END AS feature_category,
-        -- Calculate feature success rate (simplified)
-        CASE 
-            WHEN usage_count > 0 THEN 95.0 -- Assume 95% success rate for used features
-            ELSE 0.0
-        END AS feature_success_rate,
-        load_timestamp,
-        update_timestamp,
-        source_system,
-        load_date,
-        update_date
-    FROM feature_usage_source
-),
-
--- Add audit columns and final transformations
-feature_usage_final AS (
-    SELECT
-        ROW_NUMBER() OVER (ORDER BY usage_id) AS feature_usage_fact_id,
         usage_id,
         meeting_id,
-        feature_name,
-        usage_count,
+        COALESCE(feature_name, 'Unknown Feature') AS feature_name,
+        COALESCE(usage_count, 0) AS usage_count,
         usage_date,
-        usage_duration,
-        feature_category,
-        feature_success_rate,
+        
+        -- Derive usage duration (placeholder - would need actual duration data)
+        CASE
+            WHEN usage_count > 10 THEN usage_count * 2
+            WHEN usage_count > 5 THEN usage_count * 1.5
+            ELSE usage_count * 1
+        END AS usage_duration,
+        
+        -- Derive feature category based on feature name
+        CASE
+            WHEN UPPER(feature_name) LIKE '%SCREEN%SHARE%' THEN 'Screen Sharing'
+            WHEN UPPER(feature_name) LIKE '%CHAT%' THEN 'Communication'
+            WHEN UPPER(feature_name) LIKE '%RECORD%' THEN 'Recording'
+            WHEN UPPER(feature_name) LIKE '%BREAKOUT%' THEN 'Collaboration'
+            WHEN UPPER(feature_name) LIKE '%POLL%' OR UPPER(feature_name) LIKE '%SURVEY%' THEN 'Engagement'
+            WHEN UPPER(feature_name) LIKE '%WHITEBOARD%' THEN 'Collaboration'
+            ELSE 'Other'
+        END AS feature_category,
+        
+        -- Calculate feature success rate (placeholder - would need actual success/failure data)
+        CASE
+            WHEN usage_count > 0 THEN 95.0
+            ELSE 0.0
+        END AS feature_success_rate,
+        
+        -- Audit fields
         load_timestamp,
-        CURRENT_TIMESTAMP() AS update_timestamp,
-        COALESCE(load_date, CURRENT_DATE()) AS load_date,
-        CURRENT_DATE() AS update_date,
-        COALESCE(source_system, 'Silver.si_feature_usage') AS source_system,
-        -- Audit columns
-        CURRENT_TIMESTAMP() AS created_at,
-        CURRENT_TIMESTAMP() AS updated_at,
-        'SUCCESS' AS process_status
-    FROM feature_usage_transformed
+        update_timestamp,
+        load_date,
+        update_date,
+        source_system
+    FROM source_data
 )
 
-SELECT * FROM feature_usage_final
+-- Final SELECT with all required fields for Go_Feature_Usage_Fact
+SELECT
+    ROW_NUMBER() OVER (ORDER BY usage_id) AS feature_usage_fact_id,
+    usage_id,
+    meeting_id,
+    feature_name,
+    usage_count,
+    usage_date,
+    usage_duration,
+    feature_category,
+    feature_success_rate,
+    load_timestamp,
+    update_timestamp,
+    load_date,
+    update_date,
+    source_system
+FROM transformed_data
