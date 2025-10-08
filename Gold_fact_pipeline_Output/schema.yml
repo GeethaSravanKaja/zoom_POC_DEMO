@@ -1,0 +1,534 @@
+version: 2
+
+# Sources configuration
+sources:
+  - name: silver
+    description: "Silver layer tables containing cleaned and enriched data"
+    database: "{{ var('database_name', 'ZOOM_ANALYTICS') }}"
+    schema: "{{ var('silver_schema', 'SILVER') }}"
+    tables:
+      - name: si_users
+        description: "Silver layer user information"
+        columns:
+          - name: user_id
+            description: "Unique identifier for user"
+            tests:
+              - not_null
+          - name: user_name
+            description: "User display name"
+          - name: email
+            description: "User email address"
+          - name: company
+            description: "User company"
+          - name: plan_type
+            description: "User subscription plan type"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded"
+          - name: source_system
+            description: "Source system identifier"
+            
+      - name: si_meetings
+        description: "Silver layer meeting information"
+        columns:
+          - name: meeting_id
+            description: "Unique identifier for meeting"
+            tests:
+              - not_null
+          - name: host_id
+            description: "Meeting host user ID"
+          - name: meeting_topic
+            description: "Meeting topic/title"
+          - name: start_time
+            description: "Meeting start timestamp"
+          - name: end_time
+            description: "Meeting end timestamp"
+          - name: duration_minutes
+            description: "Meeting duration in minutes"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded"
+          - name: source_system
+            description: "Source system identifier"
+            
+      - name: si_participants
+        description: "Silver layer meeting participants"
+        columns:
+          - name: participant_id
+            description: "Unique identifier for participant"
+            tests:
+              - not_null
+          - name: meeting_id
+            description: "Associated meeting ID"
+          - name: user_id
+            description: "Participant user ID"
+          - name: join_time
+            description: "Participant join timestamp"
+          - name: leave_time
+            description: "Participant leave timestamp"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded"
+          - name: source_system
+            description: "Source system identifier"
+            
+      - name: si_feature_usage
+        description: "Silver layer feature usage data"
+        columns:
+          - name: usage_id
+            description: "Unique identifier for usage record"
+            tests:
+              - not_null
+          - name: meeting_id
+            description: "Associated meeting ID"
+          - name: feature_name
+            description: "Name of the feature used"
+          - name: usage_count
+            description: "Number of times feature was used"
+          - name: usage_date
+            description: "Date of feature usage"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded"
+          - name: source_system
+            description: "Source system identifier"
+            
+      - name: si_webinars
+        description: "Silver layer webinar information"
+        columns:
+          - name: webinar_id
+            description: "Unique identifier for webinar"
+            tests:
+              - not_null
+          - name: host_id
+            description: "Webinar host user ID"
+          - name: webinar_topic
+            description: "Webinar topic/title"
+          - name: start_time
+            description: "Webinar start timestamp"
+          - name: end_time
+            description: "Webinar end timestamp"
+          - name: registrants
+            description: "Number of webinar registrants"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded"
+          - name: source_system
+            description: "Source system identifier"
+            
+      - name: si_support_tickets
+        description: "Silver layer support ticket data"
+        columns:
+          - name: ticket_id
+            description: "Unique identifier for support ticket"
+            tests:
+              - not_null
+          - name: user_id
+            description: "User who created the ticket"
+          - name: ticket_type
+            description: "Type/category of support ticket"
+          - name: resolution_status
+            description: "Current status of ticket resolution"
+          - name: open_date
+            description: "Date when ticket was opened"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded"
+          - name: source_system
+            description: "Source system identifier"
+            
+      - name: si_billing_events
+        description: "Silver layer billing event data"
+        columns:
+          - name: event_id
+            description: "Unique identifier for billing event"
+            tests:
+              - not_null
+          - name: user_id
+            description: "User associated with billing event"
+          - name: event_type
+            description: "Type of billing event"
+          - name: amount
+            description: "Billing amount"
+          - name: event_date
+            description: "Date of billing event"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded"
+          - name: source_system
+            description: "Source system identifier"
+
+# Models configuration
+models:
+  - name: process_audit
+    description: "Process audit table for tracking DBT execution metrics"
+    columns:
+      - name: audit_id
+        description: "Auto-generated audit record ID"
+        tests:
+          - not_null
+          - unique
+      - name: execution_id
+        description: "DBT invocation ID for tracking execution"
+      - name: process_name
+        description: "Name of the DBT process/model"
+      - name: pipeline_name
+        description: "Name of the pipeline"
+      - name: execution_start_time
+        description: "Process execution start timestamp"
+      - name: execution_end_time
+        description: "Process execution end timestamp"
+      - name: execution_status
+        description: "Status of process execution (STARTED, COMPLETED, FAILED)"
+      - name: records_processed
+        description: "Number of records processed"
+      - name: records_inserted
+        description: "Number of records inserted"
+      - name: records_updated
+        description: "Number of records updated"
+      - name: records_failed
+        description: "Number of records that failed processing"
+      - name: process_duration_seconds
+        description: "Process execution duration in seconds"
+      - name: error_message
+        description: "Error message if process failed"
+      - name: load_date
+        description: "Date when record was loaded"
+      - name: source_system
+        description: "Source system identifier"
+        
+  - name: go_meeting_fact
+    description: "Gold layer fact table for meeting activity metrics and dimensions"
+    columns:
+      - name: meeting_fact_id
+        description: "Auto-generated surrogate key for meeting fact"
+        tests:
+          - not_null
+          - unique
+      - name: meeting_id
+        description: "Business key - unique identifier for meeting"
+        tests:
+          - not_null
+      - name: host_id
+        description: "Meeting host user identifier"
+        tests:
+          - not_null
+      - name: meeting_topic
+        description: "Meeting topic/title (cleaned and standardized)"
+      - name: start_time
+        description: "Meeting start timestamp (null-handled)"
+        tests:
+          - not_null
+      - name: end_time
+        description: "Meeting end timestamp (calculated if null)"
+        tests:
+          - not_null
+      - name: duration_minutes
+        description: "Meeting duration in minutes (calculated and capped)"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1440
+      - name: participant_count
+        description: "Number of unique participants in meeting"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: meeting_type
+        description: "Business classification of meeting type based on duration"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Quick Meeting', 'Standard Meeting', 'Extended Meeting', 'Marathon Meeting']
+      - name: load_timestamp
+        description: "Timestamp when record was processed in Gold layer"
+        tests:
+          - not_null
+      - name: source_system
+        description: "Source system identifier"
+        tests:
+          - not_null
+          
+  - name: go_participant_fact
+    description: "Gold layer fact table for individual participant engagement and attendance patterns"
+    columns:
+      - name: participant_fact_id
+        description: "Auto-generated surrogate key for participant fact"
+        tests:
+          - not_null
+          - unique
+      - name: participant_id
+        description: "Business key - unique identifier for participant"
+        tests:
+          - not_null
+      - name: meeting_id
+        description: "Associated meeting identifier"
+        tests:
+          - not_null
+      - name: user_id
+        description: "Participant user identifier"
+        tests:
+          - not_null
+      - name: participant_name
+        description: "Participant display name (joined from users table)"
+      - name: join_time
+        description: "Participant join timestamp (null-handled)"
+        tests:
+          - not_null
+      - name: leave_time
+        description: "Participant leave timestamp (calculated if null)"
+        tests:
+          - not_null
+      - name: attendance_duration
+        description: "Participant attendance duration in minutes"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: attendee_type
+        description: "Business classification of attendee engagement level"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Host', 'Active Participant', 'Moderate Participant', 'Brief Participant']
+      - name: load_timestamp
+        description: "Timestamp when record was processed in Gold layer"
+        tests:
+          - not_null
+      - name: source_system
+        description: "Source system identifier"
+        tests:
+          - not_null
+          
+  - name: go_feature_usage_fact
+    description: "Gold layer fact table for feature adoption and usage patterns across meetings"
+    columns:
+      - name: feature_usage_fact_id
+        description: "Auto-generated surrogate key for feature usage fact"
+        tests:
+          - not_null
+          - unique
+      - name: usage_id
+        description: "Business key - unique identifier for usage record"
+        tests:
+          - not_null
+      - name: meeting_id
+        description: "Associated meeting identifier"
+        tests:
+          - not_null
+      - name: feature_name
+        description: "Name of the feature used (standardized)"
+        tests:
+          - not_null
+      - name: usage_count
+        description: "Number of times feature was used (validated and capped)"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1000
+      - name: usage_date
+        description: "Date of feature usage (null-handled)"
+        tests:
+          - not_null
+      - name: usage_duration
+        description: "Estimated usage duration based on feature type"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: feature_category
+        description: "Business categorization of feature type"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Collaboration', 'Engagement', 'Documentation', 'Other']
+      - name: feature_success_rate
+        description: "Simulated feature success rate percentage"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+      - name: load_timestamp
+        description: "Timestamp when record was processed in Gold layer"
+        tests:
+          - not_null
+      - name: source_system
+        description: "Source system identifier"
+        tests:
+          - not_null
+          
+  - name: go_webinar_fact
+    description: "Gold layer fact table for webinar performance metrics and attendance analytics"
+    columns:
+      - name: webinar_fact_id
+        description: "Auto-generated surrogate key for webinar fact"
+        tests:
+          - not_null
+          - unique
+      - name: webinar_id
+        description: "Business key - unique identifier for webinar"
+        tests:
+          - not_null
+      - name: host_id
+        description: "Webinar host user identifier"
+        tests:
+          - not_null
+      - name: webinar_topic
+        description: "Webinar topic/title (cleaned and standardized)"
+      - name: start_time
+        description: "Webinar start timestamp (null-handled)"
+        tests:
+          - not_null
+      - name: end_time
+        description: "Webinar end timestamp (calculated if null)"
+        tests:
+          - not_null
+      - name: duration_minutes
+        description: "Webinar duration in minutes (calculated and capped)"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 480
+      - name: registrants
+        description: "Number of webinar registrants (validated and capped)"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 10000
+      - name: actual_attendees
+        description: "Calculated actual attendees based on registration"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: load_timestamp
+        description: "Timestamp when record was processed in Gold layer"
+        tests:
+          - not_null
+      - name: source_system
+        description: "Source system identifier"
+        tests:
+          - not_null
+          
+  - name: go_support_ticket_fact
+    description: "Gold layer fact table for customer support interactions and resolution metrics"
+    columns:
+      - name: support_ticket_fact_id
+        description: "Auto-generated surrogate key for support ticket fact"
+        tests:
+          - not_null
+          - unique
+      - name: ticket_id
+        description: "Business key - unique identifier for support ticket"
+        tests:
+          - not_null
+      - name: user_id
+        description: "User who created the support ticket"
+        tests:
+          - not_null
+      - name: ticket_type
+        description: "Type/category of support ticket (standardized)"
+        tests:
+          - not_null
+      - name: resolution_status
+        description: "Current status of ticket resolution (standardized)"
+        tests:
+          - not_null
+      - name: open_date
+        description: "Date when ticket was opened (null-handled)"
+        tests:
+          - not_null
+      - name: close_date
+        description: "Date when ticket was closed (calculated for resolved tickets)"
+      - name: priority_level
+        description: "Business-derived priority level based on ticket type"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['High', 'Medium', 'Low']
+      - name: issue_description
+        description: "Generated issue description"
+      - name: resolution_notes
+        description: "Generated resolution notes for closed tickets"
+      - name: resolution_time_hours
+        description: "Time taken to resolve ticket in hours"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              severity: warn
+      - name: satisfaction_score
+        description: "Simulated customer satisfaction score (1-5)"
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 1
+              max_value: 5
+              severity: warn
+      - name: load_timestamp
+        description: "Timestamp when record was processed in Gold layer"
+        tests:
+          - not_null
+      - name: source_system
+        description: "Source system identifier"
+        tests:
+          - not_null
+          
+  - name: go_billing_event_fact
+    description: "Gold layer fact table for financial transactions and billing events for revenue analytics"
+    columns:
+      - name: billing_event_fact_id
+        description: "Auto-generated surrogate key for billing event fact"
+        tests:
+          - not_null
+          - unique
+      - name: event_id
+        description: "Business key - unique identifier for billing event"
+        tests:
+          - not_null
+      - name: user_id
+        description: "User associated with billing event"
+        tests:
+          - not_null
+      - name: event_type
+        description: "Type of billing event (standardized)"
+        tests:
+          - not_null
+      - name: amount
+        description: "Billing amount (validated, rounded, and capped)"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100000
+      - name: event_date
+        description: "Date of billing event (null-handled)"
+        tests:
+          - not_null
+      - name: transaction_date
+        description: "Date of actual transaction"
+        tests:
+          - not_null
+      - name: currency
+        description: "Currency code (defaulted to USD)"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['USD']
+      - name: payment_method
+        description: "Payment method derived from event type"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Credit Card', 'Refund', 'Other']
+      - name: billing_cycle
+        description: "Billing cycle derived from event type"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Monthly', 'Annual', 'One-time']
+      - name: load_timestamp
+        description: "Timestamp when record was processed in Gold layer"
+        tests:
+          - not_null
+      - name: source_system
+        description: "Source system identifier"
+        tests:
+          - not_null
