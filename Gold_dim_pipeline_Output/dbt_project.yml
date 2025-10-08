@@ -1,171 +1,157 @@
-# DBT Project Configuration for Zoom Gold Dimension Pipeline
-# Author: AAVA Data Engineering Team
-# Description: Production-ready DBT project for Silver to Gold layer transformation
-# Version: 1.0
+# DBT Project Configuration for Zoom Gold Layer Pipeline
+# This file configures the DBT project for transforming Silver layer data into Gold layer dimension and fact tables
 
-name: 'zoom_gold_dimension_pipeline'
+name: 'zoom_gold_pipeline'
 version: '1.0.0'
 config-version: 2
 
 # This setting configures which "profile" dbt uses for this project.
-profile: 'zoom_gold_dimension_pipeline'
+profile: 'zoom_gold_pipeline'
 
 # These configurations specify where dbt should look for different types of files.
+# The `model-paths` config, for example, states that models in this project can be
+# found in the "models/" directory. You probably won't need to change these!
 model-paths: ["models"]
-analysis-paths: ["analyses"]
+analysis-paths: ["analysis"]
 test-paths: ["tests"]
-seed-paths: ["seeds"]
+seed-paths: ["data"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
-target-path: "target"
-clean-targets:
+target-path: "target"  # directory which will store compiled SQL files
+clean-targets:         # directories to be removed by `dbt clean`
   - "target"
   - "dbt_packages"
 
+# Variables for the project
+vars:
+  # Source database and schema configurations
+  source_database: 'ZOOM_DB'
+  source_schema: 'SILVER'
+  target_schema: 'GOLD'
+  
+  # Audit and error handling configurations
+  enable_audit_logging: true
+  enable_error_handling: true
+  
+  # Data quality configurations
+  enable_data_quality_tests: true
+  data_quality_threshold: 0.95
+  
+  # Processing configurations
+  batch_size: 10000
+  max_retry_attempts: 3
+
 # Model configurations
 models:
-  zoom_gold_dimension_pipeline:
-    # Configuration for all models in this project
+  zoom_gold_pipeline:
+    # Global model configurations
     +materialized: table
     +on_schema_change: "fail"
     
-    # Staging models configuration
-    staging:
-      +materialized: view
-      +tags: ["staging"]
-    
-    # Gold dimension models configuration
-    gold_dimensions:
+    # Audit models configuration
+    go_process_audit:
       +materialized: table
-      +tags: ["gold", "dimension"]
-      +post-hook: |
-        {% if this.name != 'go_process_audit' %}
-          INSERT INTO {{ ref('go_process_audit') }} (
-            execution_id,
-            process_name,
-            pipeline_name,
-            execution_start_time,
-            execution_end_time,
-            execution_status,
-            records_processed,
-            records_inserted,
-            records_updated,
-            records_failed,
-            process_duration_seconds,
-            error_message,
-            start_time,
-            end_time,
-            status,
-            load_date,
-            update_date,
-            source_system
-          )
-          VALUES (
-            '{{ invocation_id }}',
-            '{{ this.name }}',
-            'zoom_gold_dimension_pipeline',
-            '{{ run_started_at }}',
-            CURRENT_TIMESTAMP,
-            'SUCCESS',
-            (SELECT COUNT(*) FROM {{ this }}),
-            (SELECT COUNT(*) FROM {{ this }}),
-            0,
-            0,
-            DATEDIFF(second, '{{ run_started_at }}', CURRENT_TIMESTAMP),
-            NULL,
-            '{{ run_started_at }}',
-            CURRENT_TIMESTAMP,
-            'COMPLETED',
-            CURRENT_DATE,
-            CURRENT_DATE,
-            'DBT_GOLD_PIPELINE'
-          )
-        {% endif %}
-      +pre-hook: |
-        {% if this.name != 'go_process_audit' %}
-          INSERT INTO {{ ref('go_process_audit') }} (
-            execution_id,
-            process_name,
-            pipeline_name,
-            execution_start_time,
-            execution_end_time,
-            execution_status,
-            records_processed,
-            records_inserted,
-            records_updated,
-            records_failed,
-            process_duration_seconds,
-            error_message,
-            start_time,
-            end_time,
-            status,
-            load_date,
-            update_date,
-            source_system
-          )
-          VALUES (
-            '{{ invocation_id }}',
-            '{{ this.name }}',
-            'zoom_gold_dimension_pipeline',
-            '{{ run_started_at }}',
-            NULL,
-            'RUNNING',
-            0,
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            '{{ run_started_at }}',
-            NULL,
-            'STARTED',
-            CURRENT_DATE,
-            CURRENT_DATE,
-            'DBT_GOLD_PIPELINE'
-          )
-        {% endif %}
-
-# Snapshot configurations
-snapshots:
-  zoom_gold_dimension_pipeline:
-    +target_schema: gold
-    +strategy: timestamp
-    +updated_at: update_timestamp
-
-# Seed configurations
-seeds:
-  zoom_gold_dimension_pipeline:
-    +schema: gold
+      +tags: ["audit", "core"]
+      +pre_hook: ""
+      +post_hook: ""
+    
+    # Dimension models configuration
+    go_user_dim:
+      +materialized: table
+      +tags: ["dimension", "scd2"]
+    
+    go_license_dim:
+      +materialized: table
+      +tags: ["dimension", "scd2"]
+    
+    # Fact models configuration
+    go_meeting_fact:
+      +materialized: table
+      +tags: ["fact", "meeting"]
+    
+    go_participant_fact:
+      +materialized: table
+      +tags: ["fact", "participant"]
+    
+    go_feature_usage_fact:
+      +materialized: table
+      +tags: ["fact", "feature"]
+    
+    go_webinar_fact:
+      +materialized: table
+      +tags: ["fact", "webinar"]
+    
+    go_support_ticket_fact:
+      +materialized: table
+      +tags: ["fact", "support"]
+    
+    go_billing_event_fact:
+      +materialized: table
+      +tags: ["fact", "billing"]
+    
+    # Error handling models configuration
+    go_error_data:
+      +materialized: table
+      +tags: ["error", "monitoring"]
 
 # Test configurations
 tests:
   +store_failures: true
-  +schema: gold_test_failures
+  +severity: 'warn'
 
-# Documentation
+# Snapshot configurations
+snapshots:
+  zoom_gold_pipeline:
+    +target_schema: "{{ var('target_schema') }}_SNAPSHOTS"
+    +strategy: timestamp
+    +updated_at: updated_at
+
+# Seed configurations
+seeds:
+  zoom_gold_pipeline:
+    +schema: "{{ var('target_schema') }}_REFERENCE"
+
+# Macro configurations
+macros:
+  zoom_gold_pipeline:
+    +schema: "{{ var('target_schema') }}_MACROS"
+
+# Documentation configurations
 docs:
   generate: true
-
-# Variables
-vars:
-  # Source schema configuration
-  silver_schema: 'silver'
-  gold_schema: 'gold'
   
-  # Date variables for incremental processing
-  start_date: '2020-01-01'
-  end_date: '2099-12-31'
-  
-  # Audit configuration
-  enable_audit: true
-  audit_schema: 'gold'
-  
-  # Error handling configuration
-  enable_error_handling: true
-  error_schema: 'gold'
-
-# Dispatch configuration for cross-database compatibility
+# Dispatch configurations for package compatibility
 dispatch:
   - macro_namespace: dbt_utils
-    search_order: ['zoom_gold_dimension_pipeline', 'dbt_utils']
+    search_order: ['zoom_gold_pipeline', 'dbt_utils']
+
+# Query comment configuration
+query-comment:
+  comment: "Generated by DBT for Zoom Gold Pipeline - {{ invocation_id }}"
+  append: true
+
+# Quoting configurations for Snowflake
+quoting:
+  database: false
+  schema: false
+  identifier: false
+
+# On-run-start and on-run-end hooks
+on-run-start:
+  - "{{ log('Starting Zoom Gold Pipeline execution...', info=True) }}"
+  - "CREATE SCHEMA IF NOT EXISTS {{ var('target_schema') }}"
+
+on-run-end:
+  - "{{ log('Zoom Gold Pipeline execution completed successfully!', info=True) }}"
+  - "GRANT SELECT ON ALL TABLES IN SCHEMA {{ var('target_schema') }} TO ROLE ANALYST_ROLE"
+
+# Require DBT version
+require-dbt-version: [">=1.0.0", "<2.0.0"]
+
+# Flags
+flags:
+  send_anonymous_usage_stats: false
+  use_colors: true
+  partial_parse: true
+  static_parser: true
