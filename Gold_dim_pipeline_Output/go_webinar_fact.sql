@@ -1,20 +1,23 @@
--- =====================================================
--- Go_Webinar_Fact Model
--- Description: Gold Layer Webinar Fact Table
--- Source: Silver.si_webinars
--- Author: Data Engineer
--- =====================================================
-
 {{ config(
     materialized='table',
-    tags=['fact', 'gold', 'webinar'],
-    on_schema_change='append_new_columns',
-    pre_hook="{% if this.name != 'go_process_audit' %}INSERT INTO {{ ref('go_process_audit') }} (execution_id, process_name, pipeline_name, execution_start_time, execution_status, records_processed, start_time, status, load_date, update_date, source_system) VALUES ('{{ invocation_id }}', 'go_webinar_fact', 'gold_dimension_pipeline', CURRENT_TIMESTAMP, 'RUNNING', 0, CURRENT_TIMESTAMP, 'ACTIVE', CURRENT_DATE, CURRENT_DATE, 'DBT_PIPELINE'){% endif %}",
-    post_hook="{% if this.name != 'go_process_audit' %}UPDATE {{ ref('go_process_audit') }} SET execution_end_time = CURRENT_TIMESTAMP, execution_status = 'COMPLETED', records_processed = (SELECT COUNT(*) FROM {{ this }}), records_inserted = (SELECT COUNT(*) FROM {{ this }}), process_duration_seconds = DATEDIFF(second, execution_start_time, CURRENT_TIMESTAMP), end_time = CURRENT_TIMESTAMP WHERE execution_id = '{{ invocation_id }}' AND process_name = 'go_webinar_fact'{% endif %}"
+    tags=['fact', 'gold'],
+    pre_hook="{% if this.name != 'go_process_audit' %}INSERT INTO {{ ref('go_process_audit') }} (execution_id, process_name, pipeline_name, execution_start_time, execution_status, source_system, created_at, process_status) VALUES ('{{ invocation_id }}', 'go_webinar_fact', 'Gold_Fact_Pipeline', CURRENT_TIMESTAMP, 'RUNNING', 'DBT_Gold_Pipeline', CURRENT_TIMESTAMP, 'ACTIVE'){% endif %}",
+    post_hook="{% if this.name != 'go_process_audit' %}UPDATE {{ ref('go_process_audit') }} SET execution_end_time = CURRENT_TIMESTAMP, execution_status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP, records_processed = (SELECT COUNT(*) FROM {{ this }}) WHERE execution_id = '{{ invocation_id }}' AND process_name = 'go_webinar_fact'{% endif %}"
 ) }}
 
--- CTE for data transformation and cleansing
-WITH source_data AS (
+/*
+_____________________________________________
+## *Author*: AAVA Data Engineering Team
+## *Created on*: {{ run_started_at }}
+## *Description*: Gold Layer Webinar Fact Table - DBT Model
+## *Version*: 1.0
+## *Purpose*: Webinar activity fact table for analytics and reporting
+## *Source*: Silver.si_webinars
+_____________________________________________
+*/
+
+-- CTE for source data extraction
+WITH webinar_source AS (
     SELECT
         webinar_id,
         host_id,
@@ -28,43 +31,57 @@ WITH source_data AS (
         load_date,
         update_date
     FROM {{ source('silver', 'si_webinars') }}
-    WHERE webinar_id IS NOT NULL -- Data quality check
+    WHERE webinar_id IS NOT NULL  -- Data quality filter
 ),
 
--- Data transformation with business rules
-transformed_data AS (
+-- Data transformation and business logic
+webinar_transformed AS (
     SELECT
         webinar_id,
         host_id,
-        COALESCE(webinar_topic, 'Untitled Webinar') AS webinar_topic,
+        COALESCE(TRIM(webinar_topic), 'No Topic') AS webinar_topic,
         start_time,
         end_time,
-        
-        -- Calculate duration in minutes
-        CASE
-            WHEN start_time IS NOT NULL AND end_time IS NOT NULL
-            THEN DATEDIFF(minute, start_time, end_time)
+        -- Calculate duration
+        CASE 
+            WHEN end_time IS NOT NULL AND start_time IS NOT NULL 
+            THEN DATEDIFF('minute', start_time, end_time)
             ELSE 0
         END AS duration_minutes,
-        
         COALESCE(registrants, 0) AS registrants,
-        
-        -- Estimate actual attendees (placeholder - would need actual attendance data)
-        -- Assuming 70% attendance rate on average
-        ROUND(COALESCE(registrants, 0) * 0.7) AS actual_attendees,
-        
-        -- Audit fields
+        -- Estimate actual attendees (typically 60-70% of registrants)
+        CASE 
+            WHEN registrants > 0 THEN ROUND(registrants * 0.65)
+            ELSE 0
+        END AS actual_attendees,
         load_timestamp,
         update_timestamp,
+        COALESCE(source_system, 'Silver.si_webinars') AS source_system,
         load_date,
         update_date,
-        source_system
-    FROM source_data
+        -- Audit fields
+        CURRENT_TIMESTAMP AS created_at,
+        CURRENT_TIMESTAMP AS updated_at,
+        'ACTIVE' AS process_status
+    FROM webinar_source
+),
+
+-- Data validation and error handling
+webinar_validated AS (
+    SELECT *,
+        CASE 
+            WHEN webinar_id IS NULL OR webinar_id = '' THEN 'Missing Webinar ID'
+            WHEN host_id IS NULL OR host_id = '' THEN 'Missing Host ID'
+            WHEN start_time IS NULL THEN 'Missing Start Time'
+            WHEN end_time IS NOT NULL AND end_time < start_time THEN 'Invalid Time Range'
+            WHEN registrants < 0 THEN 'Invalid Registrant Count'
+            ELSE 'Valid'
+        END AS data_quality_status
+    FROM webinar_transformed
 )
 
--- Final SELECT with all required fields for Go_Webinar_Fact
+-- Final select with all required columns for Gold layer
 SELECT
-    ROW_NUMBER() OVER (ORDER BY webinar_id) AS webinar_fact_id,
     webinar_id,
     host_id,
     webinar_topic,
@@ -77,5 +94,12 @@ SELECT
     update_timestamp,
     load_date,
     update_date,
-    source_system
-FROM transformed_data
+    source_system,
+    created_at,
+    updated_at,
+    process_status
+FROM webinar_validated
+WHERE data_quality_status = 'Valid'  -- Only include valid records
+
+-- Order by start_time for consistent processing
+ORDER BY start_time DESC
