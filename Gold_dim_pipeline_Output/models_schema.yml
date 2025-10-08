@@ -1,0 +1,306 @@
+# Schema configuration for Zoom Gold Dimension Pipeline
+# Author: AAVA Data Engineering Team
+# Description: Sources, models, and tests configuration for Gold layer
+# Version: 1.0
+
+version: 2
+
+# Source configuration for Silver layer tables
+sources:
+  - name: silver
+    description: "Silver layer tables containing cleaned and validated data"
+    database: "{{ var('silver_database', target.database) }}"
+    schema: "{{ var('silver_schema', 'silver') }}"
+    tables:
+      - name: si_users
+        description: "Silver layer user data with basic transformations applied"
+        columns:
+          - name: user_id
+            description: "Unique identifier for each user"
+            tests:
+              - not_null
+              - unique
+          - name: user_name
+            description: "Display name of the user"
+          - name: email
+            description: "User's email address"
+            tests:
+              - not_null
+          - name: company
+            description: "Company or organization the user belongs to"
+          - name: plan_type
+            description: "Type of Zoom plan (Free, Basic, Pro, Enterprise)"
+          - name: user_status
+            description: "Current status of the user account"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded into Silver layer"
+          - name: update_timestamp
+            description: "Timestamp when record was last updated in Silver layer"
+          - name: source_system
+            description: "Source system that provided the data"
+          - name: load_date
+            description: "Date when record was loaded"
+          - name: update_date
+            description: "Date when record was last updated"
+            
+      - name: si_licenses
+        description: "Silver layer license data with basic transformations applied"
+        columns:
+          - name: license_id
+            description: "Unique identifier for each license"
+            tests:
+              - not_null
+              - unique
+          - name: license_type
+            description: "Type of license (Basic, Pro, Enterprise)"
+          - name: assigned_to_user_id
+            description: "User ID to whom the license is assigned"
+          - name: start_date
+            description: "License validity start date"
+            tests:
+              - not_null
+          - name: end_date
+            description: "License validity end date"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded into Silver layer"
+          - name: update_timestamp
+            description: "Timestamp when record was last updated in Silver layer"
+          - name: source_system
+            description: "Source system that provided the data"
+          - name: load_date
+            description: "Date when record was loaded"
+          - name: update_date
+            description: "Date when record was last updated"
+            
+      - name: si_error_data
+        description: "Silver layer error tracking data"
+        columns:
+          - name: error_id
+            description: "Unique identifier for each error record"
+          - name: error_type
+            description: "Type or category of the error"
+          - name: error_description
+            description: "Detailed description of the error"
+          - name: source_table
+            description: "Table where the error originated"
+          - name: error_timestamp
+            description: "Timestamp when the error occurred"
+          - name: process_audit_info
+            description: "Additional audit information about the process"
+          - name: status
+            description: "Current status of the error"
+          - name: load_date
+            description: "Date when error record was loaded"
+          - name: update_date
+            description: "Date when error record was last updated"
+          - name: source_system
+            description: "Source system that reported the error"
+
+# Model configurations
+models:
+  - name: go_process_audit
+    description: "Gold layer process audit table for tracking all transformations"
+    columns:
+      - name: audit_id
+        description: "Auto-incrementing unique identifier for audit records"
+        tests:
+          - not_null
+      - name: execution_id
+        description: "Unique identifier for each execution run"
+        tests:
+          - not_null
+      - name: process_name
+        description: "Name of the process or model being executed"
+        tests:
+          - not_null
+      - name: pipeline_name
+        description: "Name of the overall pipeline"
+      - name: execution_start_time
+        description: "Timestamp when process execution started"
+        tests:
+          - not_null
+      - name: execution_end_time
+        description: "Timestamp when process execution ended"
+      - name: execution_status
+        description: "Status of the execution (RUNNING, SUCCESS, FAILED)"
+        tests:
+          - accepted_values:
+              values: ['RUNNING', 'SUCCESS', 'FAILED', 'PENDING']
+      - name: records_processed
+        description: "Total number of records processed"
+      - name: records_inserted
+        description: "Number of records inserted"
+      - name: records_updated
+        description: "Number of records updated"
+      - name: records_failed
+        description: "Number of records that failed processing"
+      - name: process_duration_seconds
+        description: "Duration of process execution in seconds"
+      - name: error_message
+        description: "Error message if execution failed"
+      - name: start_time
+        description: "Process start time"
+      - name: end_time
+        description: "Process end time"
+      - name: status
+        description: "Overall status of the process"
+      - name: load_date
+        description: "Date when audit record was created"
+      - name: update_date
+        description: "Date when audit record was last updated"
+      - name: source_system
+        description: "System that created the audit record"
+        
+  - name: go_user_dim
+    description: "Gold layer user dimension table with SCD Type 2 implementation"
+    columns:
+      - name: user_id
+        description: "Business key - unique identifier for each user"
+        tests:
+          - not_null
+          - unique
+      - name: user_name
+        description: "Display name of the user"
+        tests:
+          - not_null
+      - name: email
+        description: "Standardized and validated email address"
+        tests:
+          - not_null
+      - name: company
+        description: "Normalized company name"
+      - name: plan_type
+        description: "Standardized plan type (Basic, Pro, Enterprise)"
+        tests:
+          - accepted_values:
+              values: ['Basic', 'Pro', 'Enterprise', 'Unknown']
+      - name: account_status
+        description: "Derived account status (Active, Inactive, Unknown)"
+        tests:
+          - accepted_values:
+              values: ['Active', 'Inactive', 'Unknown']
+      - name: registration_date
+        description: "Date when user registered"
+      - name: load_timestamp
+        description: "Timestamp when record was loaded"
+      - name: update_timestamp
+        description: "Timestamp when record was last updated"
+      - name: load_date
+        description: "Date when record was loaded"
+      - name: update_date
+        description: "Date when record was last updated"
+      - name: source_system
+        description: "Source system identifier"
+      - name: scd_start_date
+        description: "SCD Type 2 - effective start date"
+        tests:
+          - not_null
+      - name: scd_end_date
+        description: "SCD Type 2 - effective end date"
+        tests:
+          - not_null
+      - name: scd_current_flag
+        description: "SCD Type 2 - flag indicating current record"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+              
+  - name: go_license_dim
+    description: "Gold layer license dimension table with SCD Type 2 implementation"
+    columns:
+      - name: license_id
+        description: "Business key - unique identifier for each license"
+        tests:
+          - not_null
+          - unique
+      - name: license_type
+        description: "Standardized license type (Basic, Pro, Enterprise)"
+        tests:
+          - accepted_values:
+              values: ['Basic', 'Pro', 'Enterprise', 'Unknown']
+      - name: assigned_to_user_id
+        description: "User ID to whom the license is assigned"
+      - name: start_date
+        description: "License validity start date"
+        tests:
+          - not_null
+      - name: end_date
+        description: "License validity end date"
+      - name: assignment_status
+        description: "Derived assignment status (Active, Expired, Pending, Unknown)"
+        tests:
+          - accepted_values:
+              values: ['Active', 'Expired', 'Pending', 'Unknown']
+      - name: license_capacity
+        description: "License capacity based on type"
+      - name: load_timestamp
+        description: "Timestamp when record was loaded"
+      - name: update_timestamp
+        description: "Timestamp when record was last updated"
+      - name: load_date
+        description: "Date when record was loaded"
+      - name: update_date
+        description: "Date when record was last updated"
+      - name: source_system
+        description: "Source system identifier"
+      - name: scd_start_date
+        description: "SCD Type 2 - effective start date"
+        tests:
+          - not_null
+      - name: scd_end_date
+        description: "SCD Type 2 - effective end date"
+        tests:
+          - not_null
+      - name: scd_current_flag
+        description: "SCD Type 2 - flag indicating current record"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+              
+  - name: go_error_data
+    description: "Gold layer error data and data quality monitoring"
+    columns:
+      - name: error_id
+        description: "Unique identifier for each error record"
+        tests:
+          - not_null
+      - name: error_type
+        description: "Type or category of the error"
+        tests:
+          - not_null
+      - name: error_description
+        description: "Detailed description of the error"
+      - name: source_table
+        description: "Table where the error originated"
+      - name: source_column
+        description: "Column where the error occurred"
+      - name: error_value
+        description: "Value that caused the error"
+      - name: validation_rule
+        description: "Validation rule that was violated"
+      - name: error_severity
+        description: "Severity level of the error"
+        tests:
+          - accepted_values:
+              values: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
+      - name: resolution_status
+        description: "Current resolution status of the error"
+        tests:
+          - accepted_values:
+              values: ['Open', 'In Progress', 'Resolved', 'Pending', 'Monitoring']
+      - name: resolution_notes
+        description: "Notes about error resolution"
+      - name: error_timestamp
+        description: "Timestamp when the error occurred"
+      - name: process_audit_info
+        description: "Additional audit information"
+      - name: status
+        description: "Current status of the error record"
+      - name: load_date
+        description: "Date when error record was loaded"
+      - name: update_date
+        description: "Date when error record was last updated"
+      - name: source_system
+        description: "System that reported the error"
