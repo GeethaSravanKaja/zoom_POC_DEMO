@@ -1,0 +1,287 @@
+version: 2
+
+# Sources definition for Silver layer tables
+sources:
+  - name: silver
+    description: "Silver layer tables containing cleaned and validated data from Bronze layer"
+    schema: silver
+    tables:
+      - name: si_users
+        description: "Silver layer users table with user profile information"
+        columns:
+          - name: user_id
+            description: "Unique identifier for each user"
+            tests:
+              - not_null
+              - unique
+          - name: user_name
+            description: "Display name of the user"
+          - name: email
+            description: "Email address of the user"
+            tests:
+              - not_null
+          - name: company
+            description: "Company name associated with the user"
+          - name: plan_type
+            description: "Subscription plan type (Free, Basic, Pro, Enterprise)"
+          - name: user_status
+            description: "Current status of the user account"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded into Silver layer"
+          - name: update_timestamp
+            description: "Timestamp when record was last updated in Silver layer"
+          - name: source_system
+            description: "Source system identifier"
+          - name: load_date
+            description: "Date when record was loaded"
+          - name: update_date
+            description: "Date when record was last updated"
+
+      - name: si_licenses
+        description: "Silver layer licenses table with license assignment information"
+        columns:
+          - name: license_id
+            description: "Unique identifier for each license"
+            tests:
+              - not_null
+              - unique
+          - name: license_type
+            description: "Type of license (Basic, Pro, Enterprise)"
+          - name: assigned_to_user_id
+            description: "User ID to whom the license is assigned"
+          - name: start_date
+            description: "License validity start date"
+          - name: end_date
+            description: "License validity end date"
+          - name: load_timestamp
+            description: "Timestamp when record was loaded into Silver layer"
+          - name: update_timestamp
+            description: "Timestamp when record was last updated in Silver layer"
+          - name: source_system
+            description: "Source system identifier"
+          - name: load_date
+            description: "Date when record was loaded"
+          - name: update_date
+            description: "Date when record was last updated"
+
+      - name: si_meetings
+        description: "Silver layer meetings table with meeting information"
+        columns:
+          - name: meeting_id
+            description: "Unique identifier for each meeting"
+            tests:
+              - not_null
+              - unique
+          - name: host_id
+            description: "User ID of the meeting host"
+          - name: meeting_topic
+            description: "Topic or title of the meeting"
+          - name: start_time
+            description: "Meeting start timestamp"
+          - name: end_time
+            description: "Meeting end timestamp"
+          - name: duration_minutes
+            description: "Meeting duration in minutes"
+
+      - name: si_participants
+        description: "Silver layer participants table with meeting participation data"
+        columns:
+          - name: participant_id
+            description: "Unique identifier for each participant record"
+          - name: meeting_id
+            description: "Meeting identifier"
+          - name: user_id
+            description: "User identifier of the participant"
+          - name: join_time
+            description: "Timestamp when participant joined"
+          - name: leave_time
+            description: "Timestamp when participant left"
+
+      - name: si_feature_usage
+        description: "Silver layer feature usage table"
+        columns:
+          - name: usage_id
+            description: "Unique identifier for each usage record"
+          - name: meeting_id
+            description: "Meeting identifier where feature was used"
+          - name: feature_name
+            description: "Name of the feature used"
+          - name: usage_count
+            description: "Number of times feature was used"
+          - name: usage_date
+            description: "Date when feature was used"
+
+      - name: si_webinars
+        description: "Silver layer webinars table"
+        columns:
+          - name: webinar_id
+            description: "Unique identifier for each webinar"
+          - name: host_id
+            description: "User ID of the webinar host"
+          - name: webinar_topic
+            description: "Topic or title of the webinar"
+          - name: start_time
+            description: "Webinar start timestamp"
+          - name: end_time
+            description: "Webinar end timestamp"
+          - name: registrants
+            description: "Number of registrants"
+
+      - name: si_support_tickets
+        description: "Silver layer support tickets table"
+        columns:
+          - name: ticket_id
+            description: "Unique identifier for each support ticket"
+          - name: user_id
+            description: "User ID who created the ticket"
+          - name: ticket_type
+            description: "Type of support ticket"
+          - name: resolution_status
+            description: "Current status of the ticket"
+          - name: open_date
+            description: "Date when ticket was opened"
+
+      - name: si_billing_events
+        description: "Silver layer billing events table"
+        columns:
+          - name: event_id
+            description: "Unique identifier for each billing event"
+          - name: user_id
+            description: "User ID associated with the billing event"
+          - name: event_type
+            description: "Type of billing event"
+          - name: amount
+            description: "Billing amount"
+          - name: event_date
+            description: "Date of the billing event"
+
+      - name: si_audit
+        description: "Silver layer audit table for process tracking"
+        columns:
+          - name: execution_id
+            description: "Unique identifier for each execution"
+          - name: pipeline_name
+            description: "Name of the pipeline"
+          - name: start_time
+            description: "Process start timestamp"
+          - name: end_time
+            description: "Process end timestamp"
+          - name: status
+            description: "Process execution status"
+          - name: error_message
+            description: "Error message if any"
+
+# Models definition for Gold layer dimension tables
+models:
+  - name: go_process_audit
+    description: "Gold layer process audit table for tracking DBT model executions"
+    columns:
+      - name: audit_id
+        description: "Unique identifier for each audit record"
+        tests:
+          - not_null
+          - unique
+      - name: execution_id
+        description: "Unique identifier for each execution"
+      - name: process_name
+        description: "Name of the DBT model/process"
+      - name: pipeline_name
+        description: "Name of the pipeline"
+      - name: execution_start_time
+        description: "Process start timestamp"
+      - name: execution_end_time
+        description: "Process end timestamp"
+      - name: execution_status
+        description: "Process execution status (STARTED, COMPLETED, FAILED)"
+      - name: records_processed
+        description: "Number of records processed"
+      - name: records_inserted
+        description: "Number of records inserted"
+      - name: records_updated
+        description: "Number of records updated"
+      - name: records_failed
+        description: "Number of records that failed processing"
+      - name: process_duration_seconds
+        description: "Process duration in seconds"
+      - name: error_message
+        description: "Error message if any"
+      - name: created_at
+        description: "Record creation timestamp"
+      - name: updated_at
+        description: "Record last update timestamp"
+      - name: process_status
+        description: "Overall process status"
+
+  - name: go_user_dim
+    description: "Gold layer user dimension table with SCD Type 2 implementation"
+    columns:
+      - name: user_dim_id
+        description: "Surrogate key for user dimension"
+        tests:
+          - not_null
+          - unique
+      - name: user_id
+        description: "Business key - unique identifier for each user"
+        tests:
+          - not_null
+      - name: user_name
+        description: "Display name of the user"
+      - name: email
+        description: "Standardized email address of the user"
+      - name: company
+        description: "Normalized company name"
+      - name: plan_type
+        description: "Standardized subscription plan type (Basic, Pro, Enterprise)"
+      - name: account_status
+        description: "Derived account status (Active, Inactive, Pending, Unknown)"
+      - name: registration_date
+        description: "User registration date"
+      - name: scd_start_date
+        description: "SCD Type 2 - Record effective start date"
+      - name: scd_end_date
+        description: "SCD Type 2 - Record effective end date"
+      - name: scd_current_flag
+        description: "SCD Type 2 - Flag indicating current record"
+      - name: created_at
+        description: "Record creation timestamp"
+      - name: updated_at
+        description: "Record last update timestamp"
+      - name: process_status
+        description: "Processing status of the record"
+
+  - name: go_license_dim
+    description: "Gold layer license dimension table with SCD Type 2 implementation"
+    columns:
+      - name: license_dim_id
+        description: "Surrogate key for license dimension"
+        tests:
+          - not_null
+          - unique
+      - name: license_id
+        description: "Business key - unique identifier for each license"
+        tests:
+          - not_null
+      - name: license_type
+        description: "Standardized license type (Basic, Pro, Enterprise)"
+      - name: assigned_to_user_id
+        description: "User ID to whom the license is assigned"
+      - name: start_date
+        description: "License validity start date"
+      - name: end_date
+        description: "License validity end date"
+      - name: assignment_status
+        description: "Derived assignment status (Active, Expired, Pending, Unknown)"
+      - name: license_capacity
+        description: "License capacity based on type"
+      - name: scd_start_date
+        description: "SCD Type 2 - Record effective start date"
+      - name: scd_end_date
+        description: "SCD Type 2 - Record effective end date"
+      - name: scd_current_flag
+        description: "SCD Type 2 - Flag indicating current record"
+      - name: created_at
+        description: "Record creation timestamp"
+      - name: updated_at
+        description: "Record last update timestamp"
+      - name: process_status
+        description: "Processing status of the record"
