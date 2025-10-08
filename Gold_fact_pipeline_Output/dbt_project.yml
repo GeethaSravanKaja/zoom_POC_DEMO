@@ -1,0 +1,202 @@
+# DBT Project Configuration for Zoom Gold Fact Pipeline
+# Author: Data Engineering Team
+# Description: Configuration for transforming Silver Layer data into Gold Layer fact tables
+# Version: 1.0
+
+name: 'zoom_gold_fact_pipeline'
+version: '1.0.0'
+config-version: 2
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'zoom_analytics'
+
+# These configurations specify where dbt should look for different types of files.
+# The `model-paths` config, for example, states that models in this project can be
+# found in the "models/" directory. You probably won't need to change these!
+model-paths: ["models"]
+analysis-paths: ["analysis"]
+test-paths: ["tests"]
+seed-paths: ["data"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"  # directory which will store compiled SQL files
+clean-targets:         # directories to be removed by `dbt clean`
+  - "target"
+  - "dbt_packages"
+
+# Configuring models
+# Full documentation: https://docs.getdbt.com/reference/model-configs
+
+models:
+  zoom_gold_fact_pipeline:
+    # Configuration for all models in this project
+    +materialized: table
+    +database: "{{ var('database_name', 'ZOOM_ANALYTICS') }}"
+    +schema: "{{ var('gold_schema', 'GOLD') }}"
+    
+    # Fact table specific configurations
+    fact_tables:
+      +materialized: table
+      +pre_hook: |
+        INSERT INTO {{ ref('process_audit') }} (
+          execution_id, 
+          process_name, 
+          pipeline_name, 
+          execution_start_time, 
+          execution_status, 
+          load_date, 
+          source_system
+        ) VALUES (
+          '{{ invocation_id }}', 
+          '{{ this.name }}', 
+          'gold_fact_pipeline', 
+          CURRENT_TIMESTAMP(), 
+          'STARTED', 
+          CURRENT_DATE(), 
+          'DBT'
+        )
+      +post_hook: |
+        UPDATE {{ ref('process_audit') }} 
+        SET 
+          execution_end_time = CURRENT_TIMESTAMP(),
+          execution_status = 'COMPLETED',
+          records_processed = (SELECT COUNT(*) FROM {{ this }})
+        WHERE 
+          execution_id = '{{ invocation_id }}' 
+          AND process_name = '{{ this.name }}'
+    
+    # Audit table configuration
+    audit_tables:
+      +materialized: table
+      +schema: "{{ var('audit_schema', 'AUDIT') }}"
+
+# Variables for environment-specific configurations
+vars:
+  # Database and schema configurations
+  database_name: 'ZOOM_ANALYTICS'
+  silver_schema: 'SILVER'
+  gold_schema: 'GOLD'
+  audit_schema: 'AUDIT'
+  
+  # Data quality thresholds
+  max_meeting_duration_minutes: 1440  # 24 hours
+  max_webinar_duration_minutes: 480   # 8 hours
+  max_feature_usage_count: 1000
+  max_billing_amount: 100000.00
+  max_webinar_registrants: 10000
+  
+  # Business rule configurations
+  default_meeting_duration_minutes: 30
+  default_webinar_duration_minutes: 60
+  default_participant_duration_minutes: 1
+  
+  # Attendance classification thresholds
+  active_participant_threshold: 0.8    # 80% of meeting duration
+  moderate_participant_threshold: 0.5  # 50% of meeting duration
+  
+  # Webinar attendance simulation range
+  min_attendance_rate: 0.3  # 30%
+  max_attendance_rate: 0.7  # 70%
+  
+  # Support ticket satisfaction score range
+  min_satisfaction_score: 3.5
+  max_satisfaction_score: 5.0
+  
+  # Feature success rate simulation range
+  min_feature_success_rate: 80
+  max_feature_success_rate: 100
+
+# Seeds configuration
+seeds:
+  zoom_gold_fact_pipeline:
+    +database: "{{ var('database_name', 'ZOOM_ANALYTICS') }}"
+    +schema: "{{ var('gold_schema', 'GOLD') }}"
+
+# Snapshots configuration
+snapshots:
+  zoom_gold_fact_pipeline:
+    +database: "{{ var('database_name', 'ZOOM_ANALYTICS') }}"
+    +schema: "{{ var('gold_schema', 'GOLD') }}_SNAPSHOTS"
+    +target_schema: "{{ var('gold_schema', 'GOLD') }}_SNAPSHOTS"
+
+# Test configurations
+tests:
+  +store_failures: true
+  +database: "{{ var('database_name', 'ZOOM_ANALYTICS') }}"
+  +schema: "{{ var('audit_schema', 'AUDIT') }}"
+
+# Documentation configuration
+docs:
+  zoom_gold_fact_pipeline:
+    +database: "{{ var('database_name', 'ZOOM_ANALYTICS') }}"
+    +schema: "{{ var('gold_schema', 'GOLD') }}"
+
+# Dispatch configuration for package compatibility
+dispatch:
+  - macro_namespace: dbt_utils
+    search_order: ['zoom_gold_fact_pipeline', 'dbt_utils']
+
+# Required packages
+require-dbt-version: [">=1.0.0", "<2.0.0"]
+
+# Query comment configuration
+query-comment:
+  comment: |
+    {{ node.name }} | DBT {{ dbt_version }} | Invocation: {{ invocation_id }}
+    Generated at: {{ run_started_at }} | Target: {{ target.name }}
+  append: true
+
+# On-run-start and on-run-end hooks
+on-run-start:
+  - "{{ log('Starting Zoom Gold Fact Pipeline execution...', info=true) }}"
+  - |
+    {% if target.name == 'prod' %}
+      {{ log('Running in PRODUCTION environment', info=true) }}
+    {% else %}
+      {{ log('Running in ' ~ target.name ~ ' environment', info=true) }}
+    {% endif %}
+
+on-run-end:
+  - "{{ log('Zoom Gold Fact Pipeline execution completed.', info=true) }}"
+  - |
+    {% if results %}
+      {% set total_models = results | length %}
+      {% set successful_models = results | selectattr('status', 'equalto', 'success') | list | length %}
+      {% set failed_models = results | selectattr('status', 'equalto', 'error') | list | length %}
+      {{ log('Execution Summary: ' ~ successful_models ~ '/' ~ total_models ~ ' models successful, ' ~ failed_models ~ ' failed', info=true) }}
+    {% endif %}
+
+# Macro configurations
+macros:
+  zoom_gold_fact_pipeline:
+    +database: "{{ var('database_name', 'ZOOM_ANALYTICS') }}"
+    +schema: "{{ var('gold_schema', 'GOLD') }}"
+
+# Analysis configurations
+analysis:
+  zoom_gold_fact_pipeline:
+    +database: "{{ var('database_name', 'ZOOM_ANALYTICS') }}"
+    +schema: "{{ var('gold_schema', 'GOLD') }}"
+
+# Clean targets - additional directories to clean
+clean-targets:
+  - "target"
+  - "dbt_packages"
+  - "logs"
+  - "dbt_modules"  # Legacy dbt packages directory
+
+# Flags for controlling dbt behavior
+flags:
+  send_anonymous_usage_stats: false
+  use_colors: true
+  printer_width: 80
+  write_json: true
+  warn_error: false
+  log_cache_events: false
+
+# Quoting configuration for Snowflake
+quoting:
+  database: false
+  schema: false
+  identifier: false
