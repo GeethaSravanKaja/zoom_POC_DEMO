@@ -1,0 +1,83 @@
+# =====================================================
+# DBT Profiles Configuration Template
+# Description: Snowflake connection configuration for Gold Dimension Pipeline
+# Instructions: Copy this file to ~/.dbt/profiles.yml and update with your credentials
+# Author: Data Engineer
+# =====================================================
+
+zoom_gold_dimension_pipeline:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: [YOUR_SNOWFLAKE_ACCOUNT]  # e.g., xy12345.us-east-1
+      user: [YOUR_USERNAME]
+      password: [YOUR_PASSWORD]  # Or use authenticator for SSO
+      role: [YOUR_ROLE]  # e.g., DATA_ENGINEER
+      database: ZOOM_DB
+      warehouse: [YOUR_WAREHOUSE]  # e.g., COMPUTE_WH
+      schema: GOLD
+      threads: 4
+      keepalives_idle: 240
+      search_path: 'GOLD,SILVER,BRONZE'
+      query_tag: 'dbt_gold_dimension_pipeline'
+      
+    prod:
+      type: snowflake
+      account: [YOUR_SNOWFLAKE_ACCOUNT]
+      user: [YOUR_PROD_USERNAME]
+      password: [YOUR_PROD_PASSWORD]
+      role: [YOUR_PROD_ROLE]
+      database: ZOOM_DB
+      warehouse: [YOUR_PROD_WAREHOUSE]
+      schema: GOLD
+      threads: 8
+      keepalives_idle: 240
+      search_path: 'GOLD,SILVER,BRONZE'
+      query_tag: 'dbt_gold_dimension_pipeline_prod'
+      
+    test:
+      type: snowflake
+      account: [YOUR_SNOWFLAKE_ACCOUNT]
+      user: [YOUR_TEST_USERNAME]
+      password: [YOUR_TEST_PASSWORD]
+      role: [YOUR_TEST_ROLE]
+      database: ZOOM_DB_TEST
+      warehouse: [YOUR_TEST_WAREHOUSE]
+      schema: GOLD_TEST
+      threads: 2
+      keepalives_idle: 240
+      search_path: 'GOLD_TEST,SILVER_TEST,BRONZE_TEST'
+      query_tag: 'dbt_gold_dimension_pipeline_test'
+
+# Alternative authentication methods:
+#
+# For SSO authentication:
+# authenticator: externalbrowser
+# 
+# For key pair authentication:
+# private_key_path: /path/to/private_key.p8
+# private_key_passphrase: [YOUR_PASSPHRASE]
+#
+# For OAuth:
+# authenticator: oauth
+# token: [YOUR_OAUTH_TOKEN]
+
+# Environment-specific configurations:
+# You can also use environment variables:
+# user: "{{ env_var('DBT_SNOWFLAKE_USER') }}"
+# password: "{{ env_var('DBT_SNOWFLAKE_PASSWORD') }}"
+# account: "{{ env_var('DBT_SNOWFLAKE_ACCOUNT') }}"
+
+# Connection parameters explanation:
+# - account: Your Snowflake account identifier
+# - user: Your Snowflake username
+# - password: Your Snowflake password (consider using env vars)
+# - role: Snowflake role with appropriate permissions
+# - database: Target database name
+# - warehouse: Snowflake warehouse for compute
+# - schema: Default schema for models
+# - threads: Number of concurrent connections
+# - keepalives_idle: Keep connection alive (seconds)
+# - search_path: Schema search order
+# - query_tag: Tag for query identification in Snowflake
